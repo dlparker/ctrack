@@ -30,6 +30,12 @@ def edit_10_gen_ods(data_dir):
     data.update({"No Match": no_match_data})
     save_data(str(data_dir / "edit_10.ods"), data)
 
+def edit_10_run_calc(data_dir):
+    path = Path(data_dir) / "edit_10.ods"
+    if not path.exists():
+        raise Exception(f'no file {path}')
+    p = subprocess.run(["libreoffice", "--calc", str(path)])
+    
 def edit_10_reload_ods(data_dir):
     path = Path(data_dir) / "edit_10.ods"
     if not path.exists():
@@ -39,15 +45,27 @@ def edit_10_reload_ods(data_dir):
 
     new_matchers = []
     for index,row in enumerate(sheet):
+        if index == 0:
+            continue
         regexp, ignorecase, account_path = row[:3]
         if regexp.strip() != '':
             new_matchers.append([regexp, ignorecase, account_path])
     update_account_matchers(Path(data_dir) / "matcher_map.csv", new_matchers)
 
-def edit_10_run_calc(data_dir):
-    path = Path(data_dir) / "edit_10.ods"
-    if not path.exists():
-        raise Exception(f'no file {path}')
-    p = subprocess.run(["libreoffice", "--calc", str(path)])
-    
-    
+def edit_20_gen_ods(data_dir, gnucash_path, new_accounts_path):
+    data = OrderedDict() # from collections import OrderedDict
+
+    headers = ['account_path','description']
+    new_accounts = [headers,]
+    a_set = set()
+    with open(new_accounts_path) as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            a_set.add(row['account_path'])
+
+    for path in list(a_set):
+        new_accounts.append([path, ''])
+    data.update({"New Accounts": new_accounts})
+    dfile = data_dir / "new_accounts.ods"
+    save_data(str(dfile), data)
+    return dfile

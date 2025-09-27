@@ -43,8 +43,8 @@ Created before any operation that modifies the gnucash file.
 
 1. Parse input csv files, check against matcher_map.csv, report any lines that have no matcher
    in "missing_matchers.csv". check_phases.py::check_10
-2. Edit any missing - edit_phases:edit_10_ods
-3. Export accounts from gnucash Check matchers against accounts - check_20.py
+2. Edit any missing - edit_phases.py::edit_10_gen_ods,edit_phases.py::edit_10_reload_ods
+3. Export accounts from gnucash Check matchers against accounts - check_phases.py::check_20
    1. If accounts exist but have no matcher, manually update matcher_map.csv  - edit_20.py
    2. If any input matchers name accounts that are missing from gnucash accounts
       1. edit account_defs.py - edit_30.py

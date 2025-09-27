@@ -47,6 +47,7 @@ def update_account_matchers(path, new_matchers):
         all_matchers.append(item)
     with open(path, 'a+') as f:
         csv_writer = csv.DictWriter(f, fieldnames=fieldnames)
+        csv_writer.writeheader()
         csv_writer.writerows(all_matchers)
 
 

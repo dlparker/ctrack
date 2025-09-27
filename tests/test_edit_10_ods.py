@@ -12,10 +12,15 @@ def test_edit_10_ods():
     shutil.copy(orig_map_path, map_path)
     misses = check_10(data_dir)
     edit_10_gen_ods(data_dir)
-    #edit_10_run_calc(data_dir)
+    # in command line tool do this:
+    # edit_10_run_calc(data_dir)
+
+    # simulate human fixing things in ods file
     edited_path = Path(data_dir) / "edit_10_edited.ods"
     op_path = Path(data_dir) / "edit_10.ods"
     shutil.copy(edited_path, op_path)
+
+    # now make sure that it did fix things
     edit_10_reload_ods(data_dir)
     finished_misses = check_10(data_dir)
     assert len(finished_misses) == 0
