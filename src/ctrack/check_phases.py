@@ -7,7 +7,7 @@ from ctrack.make_map import build_account_matchers, map_card_input_accounts
 from ctrack.account_sync import export_gnucash_accounts, update_gnucash_accounts
 from ctrack.cc_file_ops import find_card_files
 
-DEBUG_PRINT=True
+DEBUG_PRINT=False
 
 def check_10(data_dir):
     by_card = find_card_files(data_dir, pattern="cc_*.csv")

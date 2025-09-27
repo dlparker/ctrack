@@ -6,6 +6,7 @@ from collections import OrderedDict
 from pyexcel_ods3 import save_data
 import pyexcel as pe
 from ctrack.make_map import update_account_matchers
+from ctrack.account_sync import update_gnucash_accounts
 
 def edit_10_gen_ods(data_dir):
     data = OrderedDict() # from collections import OrderedDict
@@ -69,3 +70,26 @@ def edit_20_gen_ods(data_dir, gnucash_path, new_accounts_path):
     dfile = data_dir / "new_accounts.ods"
     save_data(str(dfile), data)
     return dfile
+
+def edit_20_run_calc(data_dir):
+    path = Path(data_dir) / "new_accounts.ods"
+    if not path.exists():
+        raise Exception(f'no file {path}')
+    p = subprocess.run(["libreoffice", "--calc", str(path)])
+
+def edit_20_reload_ods(data_dir, gnucash_path):
+    path = Path(data_dir) / "new_accounts.ods"
+    if not path.exists():
+        raise Exception(f'no file {path}')
+    book = pe.get_book(file_name=path)
+    sheet = book.bookdict['New Accounts']
+
+    new_accounts = []
+    for index,row in enumerate(sheet):
+        if index == 0:
+            continue
+        account_path, description = row[:2]
+        new_accounts.append({"account_path": account_path, "description": description})
+        
+    update_gnucash_accounts(gnucash_path, new_accounts)
+
