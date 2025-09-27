@@ -1,0 +1,26 @@
+[project]
+name = "ctrack"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Dennis Parker", email = "dennis@windhavengroup.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "piecash>=1.2.1",
+    "pyexcel-ods3>=0.6.1",
+]
+
+[project.scripts]
+ctrack = "ctrack:main"
+
+[build-system]
+requires = ["uv_build>=0.8.14,<0.9.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+    "pytest-cov>=7.0.0",
+]

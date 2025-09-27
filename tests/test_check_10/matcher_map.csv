@@ -1,0 +1,11 @@
+cc_desc_re,re_no_case,account_path
+"^amazon\.com",True,Expenses|online_shop|Amazon
+"^amazon mktp",True,Expenses|online_shop|Amazon
+"^amzn mktp",True,Expenses|online_shop|Amazon
+"^amzn prime",True,Expenses|online_shop|Amazon
+"^amazon prime",True,Expenses|online_shop|Amazon
+"^prime video",True,Expenses|online_service|entertainment|Streaming
+"^heb online",True,Expenses|groceries|heb|online
+
+
+
