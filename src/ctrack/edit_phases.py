@@ -39,8 +39,6 @@ def edit_10_reload_ods(data_dir):
 
     new_matchers = []
     for index,row in enumerate(sheet):
-        if index == 0:
-            continue
         regexp, ignorecase, account_path = row[:3]
         if regexp.strip() != '':
             new_matchers.append([regexp, ignorecase, account_path])

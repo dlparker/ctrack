@@ -68,18 +68,3 @@ def export_gnucash_accounts(gnucash_path, export_path):
             writer.writerows(recs)               
 
 
-if __name__=="__main__":
-    account_defs = [
-        {
-            "account_path": "Expenses",
-            "description": "All expenses"
-         },
-    ]
-                    
-    path = "/tmp/test.gnucash"
-    update_gnucash_accounts(path, account_defs)
-    export_gnucash_accounts(path, "/tmp/accounts.csv")
-
-    
-    
-

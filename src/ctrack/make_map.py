@@ -51,7 +51,7 @@ def update_account_matchers(path, new_matchers):
 
 
 def map_card_input_accounts(fpath, col_map, account_matchers):
-
+    global breaker
     path = Path(fpath)
 
     items = []
@@ -68,24 +68,11 @@ def map_card_input_accounts(fpath, col_map, account_matchers):
             if matcher.re_compiled.match(item):
                 accnt_name = matcher.value
                 break
+
         res_dict[item] = accnt_name
     return res_dict
                 
 
-if __name__=="__main__":
-    from pprint import pprint
-    data_dir = Path(__file__).parent / "test_data"
-    by_card = find_card_files(data_dir)
-    pprint(by_card)
-
-    for card, data in by_card.items():
-        print('-'*120)
-        print(f"Card = {card}")
-        cat_map = dict()
-        for spec in data.values():
-            cat_map = map_accounts(spec['path'], spec['col_map'], spec['account_matchers'])
-        print(f"End Card = {card}")
-        pprint(cat_map)
     
     
 

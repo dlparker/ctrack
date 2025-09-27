@@ -65,21 +65,4 @@ def map_accounts(fpath, col_map, account_matchers):
     return res_dict
                 
 
-if __name__=="__main__":
-    from pprint import pprint
-    data_dir = Path(__file__).parent / "test_data"
-    by_card = find_card_files(data_dir)
-    pprint(by_card)
-
-    for card, data in by_card.items():
-        print('-'*120)
-        print(f"Card = {card}")
-        cat_map = dict()
-        for spec in data.values():
-            cat_map = map_accounts(spec['path'], spec['col_map'], spec['account_matchers'])
-        print(f"End Card = {card}")
-        pprint(cat_map)
-    
-    
-
     
