@@ -7,7 +7,7 @@ from ctrack.check_phases import check_10
 from ctrack.cc_file_ops import find_card_files
 
 def test_check_10():
-    data_dir = Path(__file__).parent / "test_check_10"
+    data_dir = Path(__file__).parent / "data_test_check_10"
     misses = check_10(data_dir)
 
     # first make sure that file contains all the missed items
