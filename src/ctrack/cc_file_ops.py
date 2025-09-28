@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 import re
 import csv
+from pprint import pformat
 from pathlib import Path
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
+from ctrack.make_map import build_account_matchers,map_card_input_line_account
 
 card_file_col_maps = {
     'boa': {
@@ -15,7 +17,7 @@ card_file_col_maps = {
             }
 }
 
-def find_card_files(data_dir, pattern="*cc_.csv"):
+def find_card_files(data_dir, pattern="*cc_*.csv"):
     by_card = defaultdict(dict)
     for csvpath in data_dir.glob(pattern):
         tmp = csvpath.stem.split("_")
@@ -63,6 +65,47 @@ def map_accounts(fpath, col_map, account_matchers):
                 break
         res_dict[item] = accnt_name
     return res_dict
-                
-
     
+def convert_card_files(data_dir, out_dir, pattern="*cc_*.csv"):
+    data_dir = Path(data_dir)
+    out_dir = Path(out_dir)
+    if data_dir == out_dir:
+        prefix = "mod_"
+    else:
+        prefix = ""
+    by_card = find_card_files(data_dir, pattern)
+    matcher_map_csv_path = data_dir / "matcher_map.csv"
+    account_matchers = build_account_matchers(matcher_map_csv_path)
+    for card, data in by_card.items():
+        for spec in data.values():
+            new_lines = []
+            col_map = spec['col_map']
+            print(spec['path'])
+            with open(spec['path']) as f:
+                csv_reader = csv.DictReader(f)
+                for row in csv_reader:
+                    if float(row[col_map['amt_col_name']]) > 0:
+                        continue
+                    desc = row[col_map['desc_col_name']]
+                    account_path = map_card_input_line_account(desc, account_matchers)
+                    if account_path is None:
+                        raise Exception(f'cannot convert files, missing accounts for "{desc}"')
+                    new_row = dict(row)
+                    new_row['gnucash_account'] = account_path
+                    new_lines.append(new_row)
+            new_file = out_dir / f"{prefix}{Path(spec['path']).stem}.csv"
+            print(new_file)
+            with open(new_file, 'w') as f:
+                fieldnames = ["Date", "Description", "Amount", "Account"]
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                for row in new_lines:
+                    new_row = {
+                        'Date': row[col_map['date_col_name']],
+                        'Description': row[col_map['desc_col_name']],
+                        'Amount': row[col_map['amt_col_name']],
+                        'Account': row['gnucash_account']
+                        }
+                    writer.writerow(new_row)
+                        
+                

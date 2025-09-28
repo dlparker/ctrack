@@ -1,0 +1,36 @@
+account_path,description
+Expenses,All expenses
+Expenses:Adjustment,Adjustment
+Expenses:Auto,Auto
+Expenses:Auto:Fees,Fees
+Expenses:Auto:Repair and Maintenance,Repair and Maintenance
+Expenses:Auto:Auto Insurance,Auto Insurance
+Expenses:Bank Service Charge,Bank Service Charge
+Expenses:Books,Books
+Expenses:Clothes,Clothes
+Expenses:Computer,Computer
+Expenses:Dining,Dining
+Expenses:Entertainment,Entertainment
+Expenses:Entertainment:Streaming
+Expenses:Entertainment:Recreation,Recreation
+Expenses:Groceries,Groceries
+Expenses:Groceries:OnLine,Groceries OnLine
+Expenses:Hobbies,Hobbies
+Expenses:House,Tied to house
+Expenses:House:House Insurance,House Insurance
+Expenses:Insurance:Health Insurance,Health Insurance
+Expenses:Medical Expenses,Medical Expenses
+Expenses:Miscellaneous,Miscellaneous
+Expenses:Online Services,Online Services
+Expenses:Online Services:Internet,Internet Service
+Expenses:Online Services:Office Apps,Office Apps (email, etc.)
+Expenses:Online Services:Hosting,Hosting Services
+Expenses:Online Services:AI,AI accounts
+Expenses:Phone,Phone
+Expenses:Taxes,Taxes
+Expenses:Taxes:Federal,Federal Tax
+Expenses:Taxes:Property,Property Tax
+Expenses:Taxes:Other Tax,Other Tax
+Expenses:Utilities,Utilities
+Expenses:Utilities:Electric,Electric
+Expenses:Utilities:Water,Water

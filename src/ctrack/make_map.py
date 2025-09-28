@@ -41,20 +41,16 @@ def update_account_matchers(path, new_matchers):
         csv_reader = csv.DictReader(f)
         fieldnames = csv_reader.fieldnames
     for row in new_matchers:
-        item = {'cc_desc_re': row[0],
-                're_no_case': row[1],
-                'account_path': row[2]}
+        item = [row[0],row[1],row[2]]
         all_matchers.append(item)
     with open(path, 'a+') as f:
-        csv_writer = csv.DictWriter(f, fieldnames=fieldnames)
-        csv_writer.writeheader()
+        f.write('\n')
+        csv_writer = csv.writer(f)
         csv_writer.writerows(all_matchers)
 
 
 def map_card_input_accounts(fpath, col_map, account_matchers):
-    global breaker
     path = Path(fpath)
-
     items = []
     with open(path) as f:
         csv_reader = csv.DictReader(f)
@@ -73,8 +69,13 @@ def map_card_input_accounts(fpath, col_map, account_matchers):
         res_dict[item] = accnt_name
     return res_dict
                 
+def map_card_input_line_account(desc, account_matchers):
+    accnt_name = None
+    for matcher in account_matchers:
+        if matcher.re_compiled.match(desc):
+            return matcher.value
+    return None
 
-    
     
 
     

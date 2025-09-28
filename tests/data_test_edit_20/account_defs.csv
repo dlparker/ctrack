@@ -1,4 +1,4 @@
 account_path,description
 Expenses,All expenses
-Expenses|house,Tied to house
-Expenses|house|insurance,House insurance
+Expenses:House,Tied to house
+Expenses:House:Insurance,House Insurance

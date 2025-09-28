@@ -1,14 +1,14 @@
 account_path,cc_desc_re
-Expenses|online_shop|Amazon,^amazon\.com
-Expenses|online_shop|Amazon,^amazon mktp
-Expenses|online_shop|Amazon,^amzn mktp
-Expenses|online_shop|Amazon,^amzn prime
-Expenses|online_shop|Amazon,^amazon prime
-Expenses|online_service|entertainment|Streaming,^prime video
-Expenses|groceries|heb|onlineregexp,^heb online
-Expenses|online_service|hosting,^digitalocean
-Expenses|online_service|entertainment|streaming,^netflix
-Expenses|basic|phone,^tmobile
-Expenses|misc,^ebay
-Expenses|basic|internet,^spectrum
-Expenses|online_service|entertainment|books,^kindle unltd
+Expenses:online_shop:Amazon,^amazon\.com
+Expenses:online_shop:Amazon,^amazon mktp
+Expenses:online_shop:Amazon,^amzn mktp
+Expenses:online_shop:Amazon,^amzn prime
+Expenses:online_shop:Amazon,^amazon prime
+Expenses:online_service:entertainment:Streaming,^prime video
+Expenses:groceries:heb:online_groceries
+Expenses:online_service:hosting,^digitalocean
+Expenses:online_service:entertainment:streaming,^netflix
+Expenses:basic:phone,^tmobile
+Expenses:misc,^ebay
+Expenses:basic:internet,^spectrum
+Expenses:online_service:entertainment:books,^kindle unltd

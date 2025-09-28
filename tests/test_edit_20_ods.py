@@ -2,8 +2,8 @@
 import shutil
 from pathlib import Path
 from ctrack.check_phases import check_20
+from ctrack.cc_file_ops import convert_card_files
 from ctrack.edit_phases import edit_20_gen_ods, edit_20_reload_ods
-
 
 def test_edit_20_ods():
     data_dir = Path(__file__).parent / "data_test_edit_20"
@@ -25,6 +25,7 @@ def test_edit_20_ods():
 
     # now make sure that it did fix things
     edit_20_reload_ods(data_dir, gnucash_path)
+    convert_card_files(data_dir, "/tmp")
 
 
     
