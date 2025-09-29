@@ -3,11 +3,17 @@ from pathlib import Path
 import json
 import csv
 import re
+import shutil
 from ctrack.check_phases import check_10
 from ctrack.cc_file_ops import find_card_files
 
 def test_check_10():
-    data_dir = Path(__file__).parent / "data_test_check_10"
+    pull_dir = Path(__file__).parent / "data_test_check_10"
+    data_dir = Path(__file__).parent / "target"
+    for item in data_dir.glob("*"):
+        item.unlink()
+    for item in pull_dir.glob("*"):
+        shutil.copy(item, data_dir)
     misses = check_10(data_dir)
 
     # first make sure that file contains all the missed items

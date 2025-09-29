@@ -6,7 +6,12 @@ from ctrack.check_phases import check_20
 from ctrack.edit_phases import edit_20_gen_ods
 
 def test_check_20_ods():
-    data_dir = Path(__file__).parent / "data_test_check_20"
+    pull_dir = Path(__file__).parent / "data_test_check_20"
+    data_dir = Path(__file__).parent / "target"
+    for item in data_dir.glob("*"):
+        item.unlink()
+    for item in pull_dir.glob("*"):
+        shutil.copy(item, data_dir)
     test_path = data_dir / "test.gnucash"
     no_match_accounts, no_account_matchers, res_path = check_20(test_path, data_dir)
     saved_new = []

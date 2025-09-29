@@ -6,7 +6,13 @@ from ctrack.cc_file_ops import convert_card_files
 from ctrack.edit_phases import edit_20_gen_ods, edit_20_reload_ods
 
 def test_edit_20_ods():
-    data_dir = Path(__file__).parent / "data_test_edit_20"
+
+    pull_dir = Path(__file__).parent / "data_test_edit_20"
+    data_dir = Path(__file__).parent / "target"
+    for item in data_dir.glob("*"):
+        item.unlink()
+    for item in pull_dir.glob("*"):
+        shutil.copy(item, data_dir)
     orig_path = data_dir / "orig_test.gnucash"
     gnucash_path = data_dir / "test.gnucash"
     shutil.copy(orig_path, gnucash_path)
