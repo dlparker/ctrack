@@ -8,7 +8,7 @@ import pyexcel as pe
 from ctrack.make_map import update_account_matchers
 from ctrack.account_sync import update_gnucash_accounts
 
-def edit_10_gen_ods(data_dir):
+def setup_ods_matcher_edit(data_dir):
     data = OrderedDict() # from collections import OrderedDict
 
     max_file_count = 0
@@ -31,13 +31,13 @@ def edit_10_gen_ods(data_dir):
     data.update({"No Match": no_match_data})
     save_data(str(data_dir / "edit_10.ods"), data)
 
-def edit_10_run_calc(data_dir):
+def run_ods_matcher_edit(data_dir):
     path = Path(data_dir) / "edit_10.ods"
     if not path.exists():
         raise Exception(f'no file {path}')
     p = subprocess.run(["libreoffice", "--calc", str(path)])
     
-def edit_10_reload_ods(data_dir):
+def apply_ods_matcher_edit(data_dir):
     path = Path(data_dir) / "edit_10.ods"
     if not path.exists():
         raise Exception(f'no file {path}')
@@ -53,7 +53,7 @@ def edit_10_reload_ods(data_dir):
             new_matchers.append([regexp, ignorecase, account_path])
     update_account_matchers(Path(data_dir) / "matcher_map.csv", new_matchers)
 
-def edit_20_gen_ods(data_dir, gnucash_path, new_accounts_path):
+def setup_ods_accounts_edit(data_dir, gnucash_path, new_accounts_path):
     data = OrderedDict() # from collections import OrderedDict
 
     headers = ['account_path','description']
@@ -71,13 +71,13 @@ def edit_20_gen_ods(data_dir, gnucash_path, new_accounts_path):
     save_data(str(dfile), data)
     return dfile
 
-def edit_20_run_calc(data_dir):
+def run_ods_accounts_edit(data_dir):
     path = Path(data_dir) / "new_accounts.ods"
     if not path.exists():
         raise Exception(f'no file {path}')
     p = subprocess.run(["libreoffice", "--calc", str(path)])
 
-def edit_20_reload_ods(data_dir, gnucash_path):
+def apply_ods_accounts_edit(data_dir, gnucash_path):
     path = Path(data_dir) / "new_accounts.ods"
     if not path.exists():
         raise Exception(f'no file {path}')

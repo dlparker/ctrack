@@ -9,7 +9,7 @@ from ctrack.cc_file_ops import find_card_files
 
 DEBUG_PRINT=False
 
-def check_10(data_dir):
+def match_input_to_accounts(data_dir):
     by_card = find_card_files(data_dir, pattern="cc_*.csv")
     matcher_map_csv_path = data_dir / "matcher_map.csv"
     account_matchers = build_account_matchers(matcher_map_csv_path)
@@ -29,7 +29,7 @@ def check_10(data_dir):
             writer.writerow({'description': desc, 'files': json.dumps(files)})
     return miss_match
 
-def check_20(gnucash_path, data_dir):
+def check_account_matcher(gnucash_path, data_dir):
     acc_defs_path = Path(data_dir) / "account_defs.csv"
     export_gnucash_accounts(gnucash_path, acc_defs_path)
     matcher_map_csv_path = Path(data_dir) / "matcher_map.csv"

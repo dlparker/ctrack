@@ -4,7 +4,7 @@ import json
 import csv
 import re
 import shutil
-from ctrack.check_phases import check_10
+from ctrack.check_phases import match_input_to_accounts
 from ctrack.cc_file_ops import find_card_files
 
 def test_check_10():
@@ -14,7 +14,7 @@ def test_check_10():
         item.unlink()
     for item in pull_dir.glob("*"):
         shutil.copy(item, data_dir)
-    misses = check_10(data_dir)
+    misses = match_input_to_accounts(data_dir)
 
     # first make sure that file contains all the missed items
     from_file = {}

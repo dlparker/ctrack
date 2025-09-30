@@ -2,8 +2,8 @@
 import shutil
 import csv
 from pathlib import Path
-from ctrack.check_phases import check_20
-from ctrack.edit_phases import edit_20_gen_ods
+from ctrack.check_phases import check_account_matcher
+from ctrack.edit_phases import setup_ods_accounts_edit
 
 def test_check_20_ods():
     pull_dir = Path(__file__).parent / "data_test_check_20"
@@ -13,7 +13,7 @@ def test_check_20_ods():
     for item in pull_dir.glob("*"):
         shutil.copy(item, data_dir)
     test_path = data_dir / "test.gnucash"
-    no_match_accounts, no_account_matchers, res_path = check_20(test_path, data_dir)
+    no_match_accounts, no_account_matchers, res_path = check_account_matcher(test_path, data_dir)
     saved_new = []
     with open(res_path) as f:
         reader = csv.DictReader(f)

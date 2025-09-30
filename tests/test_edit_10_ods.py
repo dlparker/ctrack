@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 import shutil
 from pathlib import Path
-from ctrack.check_phases import check_10
-from ctrack.edit_phases import edit_10_gen_ods, edit_10_reload_ods, edit_10_run_calc
+from ctrack.check_phases import match_input_to_accounts
+from ctrack.edit_phases import setup_ods_matcher_edit, apply_ods_matcher_edit, run_ods_matcher_edit
 
 
 def test_edit_10_ods():
@@ -15,8 +15,8 @@ def test_edit_10_ods():
     orig_map_path = data_dir / "matcher_map_orig.csv"
     map_path = data_dir / "matcher_map.csv"
     shutil.copy(orig_map_path, map_path)
-    misses = check_10(data_dir)
-    edit_10_gen_ods(data_dir)
+    misses = match_input_to_accounts(data_dir)
+    setup_ods_matcher_edit(data_dir)
     # in command line tool do this:
     # edit_10_run_calc(data_dir)
 
@@ -26,8 +26,8 @@ def test_edit_10_ods():
     shutil.copy(edited_path, op_path)
 
     # now make sure that it did fix things
-    edit_10_reload_ods(data_dir)
-    finished_misses = check_10(data_dir)
+    apply_ods_matcher_edit(data_dir)
+    finished_misses = match_input_to_accounts(data_dir)
     assert len(finished_misses) == 0
     
 
