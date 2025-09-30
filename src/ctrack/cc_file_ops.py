@@ -1,4 +1,6 @@
-#!/usr/bin/env python
+"""
+Code Stage: Solving
+"""
 import re
 import csv
 from pprint import pformat
@@ -47,24 +49,6 @@ def find_card_files(data_dir, pattern="*cc_*.csv"):
         
     return by_card
 
-def map_accounts(fpath, col_map, account_matchers):
-
-    path = Path(fpath)
-
-    items = []
-    with open(path) as f:
-        csv_reader = csv.DictReader(f)
-        for row in csv_reader:
-            items.append(row[col_map['desc_col_name']])
-    res_dict = {}
-    for item in items:
-        accnt_name = None
-        for matcher in account_matchers:
-            if matcher.re_compiled.match(item):
-                accnt_name = matcher.value
-                break
-        res_dict[item] = accnt_name
-    return res_dict
     
 def convert_card_files(data_dir, out_dir, pattern="*cc_*.csv"):
     data_dir = Path(data_dir)

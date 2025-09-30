@@ -1,3 +1,6 @@
+"""
+Code Stage: Solving
+"""
 import subprocess
 import json
 import csv
@@ -31,7 +34,7 @@ def setup_ods_matcher_edit(data_dir):
     data.update({"No Match": no_match_data})
     save_data(str(data_dir / "edit_10.ods"), data)
 
-def run_ods_matcher_edit(data_dir):
+def run_ods_matcher_edit(data_dir): # pragma: no cover
     path = Path(data_dir) / "edit_10.ods"
     if not path.exists():
         raise Exception(f'no file {path}')
@@ -71,7 +74,7 @@ def setup_ods_accounts_edit(data_dir, gnucash_path, new_accounts_path):
     save_data(str(dfile), data)
     return dfile
 
-def run_ods_accounts_edit(data_dir):
+def run_ods_accounts_edit(data_dir): # pragma: no cover
     path = Path(data_dir) / "new_accounts.ods"
     if not path.exists():
         raise Exception(f'no file {path}')

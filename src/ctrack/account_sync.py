@@ -1,4 +1,6 @@
-#!/usr/bin/env python
+"""
+Code Stage: Solving
+"""
 from pathlib import Path
 import csv
 from piecash import open_book, create_book, Account
@@ -10,18 +12,12 @@ def find_account(parent, name):
     for acc in parent.children:
         if acc.name == name:
             return acc
-        res = find_account(acc, name)
-        if res:
-            return res
     return None
         
 def update_gnucash_accounts(gnucash_path, account_defs):
     path =  Path(gnucash_path)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=sa_exc.SAWarning)
-        if not path.exists():
-            with create_book(sqlite_file=str(path), currency="USD") as book:
-                book.save()
         with open_book(str(path), readonly=False) as book:
             USD = book.commodities.get(mnemonic="USD")
             for ac_def in account_defs:

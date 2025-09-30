@@ -1,0 +1,92 @@
+* Project goal
+
+Build an external mapping tool that can process credit card transaction CSV file downloads and
+ensure that there is way to assign each item in the file to an expense category in gnucash. The
+mapping tool creates a mapping file that has regular expressions associated with "account path" strings
+such that processing the cc file can produce a modified version that will import properly into
+gnucash.
+
+** Artifacts:
+
+*** matcher_map.csv
+
+Permanent result of operations, regular expression and account mapping.
+Example:
+
+cc_desc_re,re_no_case,account_path
+"^amazon\.com",True,Expenses:online_shop:Amazon
+
+The re_no_case column tells the processor code to apply no case flag on match attempts
+The "account_path" column is meant to be split on the colon character, such that each
+element of the split is a child of the previous element. This matches the full account
+name format used in gnucash and automatically converts to hierarchical accounts on
+input if there is an exact match.
+
+*** account_defs.csv
+
+Temporary file generated from gnucash that contains the list of expense type accounts
+defined in gnucash. One (optional) element of the process is to edit this file to add
+new accounts that should be created in the gnucash file, which can be done by one of the
+tools.
+
+
+*** no_match_results.csv
+
+Temporary file containing each input description that did not get matched by the matcher_map.csv
+data. The matcher_map.csv file needs updating to have a matcher for this item and possibly the
+account_defs.csv does too.
+
+
+** Steps
+
+1. Export accounts from gnucash Check matchers against accounts - check_phases.py::check_account_matcher
+2. If accounts exist but have no matcher, manually update matcher_map.csv:
+   1. Using libreoffice
+      1. ods file created with incomplete matcher_map
+      2. libreoffice calc started on file for manual edit
+      3. ods file converted to new_accounts.csv
+      4. import of new_accounts.csv into gnucash database
+   2. Using nicegui
+      1. edit page TBD
+      2. import page TBD
+      3. re-check results TBD
+3. Parse input csv files, check against matcher_map.csv, report any lines that have no matcher
+   in "missing_matchers.csv". check_phases.py::check_input_to_accounts
+4. Edit edit matcher_map.csv to add matchers for unmatched input lines
+   1. Using ods:
+      1. ods file created with unmatched descriptions
+      2. run libreoffice calc on ods so user can create new matcher_map entry
+      3. update matcher_map.csv
+   2. Using nicegui
+      1. present description and ask for regexp
+         1. Test regexp to see if it matches
+      2. offer account paths (names) for line
+         1. Offer option to add an account, which will imply doing the whole check
+            against gnucash and apply sequence
+5. Recheck accounts against matcher_map and repeat as needed
+6. Once accounts and matcher_map and input file are all in sync
+   1. If on command line, start gnucash
+   2. If in nicegui, tell user to run gnucash
+
+** Future enhancements
+
+*** Direct import
+
+Use piecash to perform the import on the DB. This could be a big project, because manually importing uses
+a wizard to configure the import process, so there may be some non-obvious things happening. It might
+not be that hard, however, if all the setup is done correctly. Need to add some kind of feature for
+ensuring the mapping between the Credit Card Liability account and the external identification of the
+input source, which is currently totally manual.
+
+*** Nicegui direct
+
+It is worth considering a tool to add direct review of imported data. Before getting too deep in
+using nicegui to manipulate gnucash db directly, it is worth studying whether it would be
+better to make this a fork of the pynomina tool and develop any complex reporting and viewing
+on top of the independent format used in that project. https://github.com/WolfgangFahl/pynomina
+
+
+
+
+
+

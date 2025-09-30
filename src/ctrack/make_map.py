@@ -1,19 +1,12 @@
-#!/usr/bin/env python
+"""
+Code Stage: Solving
+"""
 import re
 import csv
 from pathlib import Path
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
-
-card_file_col_maps = {
-    'boa': {
-            "date_col_name": "Posted Date",
-            "desc_col_name": "Payee",
-            "amt_col_name": "Amount",
-            "date_format": "%m/%d/%Y"
-            }
-}
 
 @dataclass
 class AccountMatcher:
@@ -47,7 +40,6 @@ def update_account_matchers(path, new_matchers):
         f.write('\n')
         csv_writer = csv.writer(f)
         csv_writer.writerows(all_matchers)
-
 
 def map_card_input_accounts(fpath, col_map, account_matchers):
     path = Path(fpath)

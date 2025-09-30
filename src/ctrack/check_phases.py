@@ -1,3 +1,6 @@
+"""
+Code Stage: Solving
+"""
 import csv
 from pprint import pprint
 from collections import defaultdict
@@ -6,8 +9,6 @@ import json
 from ctrack.make_map import build_account_matchers, map_card_input_accounts
 from ctrack.account_sync import export_gnucash_accounts, update_gnucash_accounts
 from ctrack.cc_file_ops import find_card_files
-
-DEBUG_PRINT=False
 
 def match_input_to_accounts(data_dir):
     by_card = find_card_files(data_dir, pattern="cc_*.csv")
@@ -60,13 +61,5 @@ def check_account_matcher(gnucash_path, data_dir):
         writer.writeheader()
         for row in no_account_matchers:
             writer.writerow({'account_path': row.value, 'cc_desc_re': row.re_str})
-    if DEBUG_PRINT:
-        print("Accounts missing from matchers (may be ok if not leaf):")
-        for acc in no_match_accounts:
-            print(acc)
-        print("-"*100)
-        print("Matchers naming non-existing accounts:")
-        for m in no_account_matchers:
-            print(m)
     return no_match_accounts, no_account_matchers, res_path
 

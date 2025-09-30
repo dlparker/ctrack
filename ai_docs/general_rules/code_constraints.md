@@ -15,6 +15,7 @@ code, ensuring that issues are exposed with maximum diagnostic information to de
 1. If errors are expected as a normal part of the flow of operations, they may be handled. Examples
    * asyncio.CancelledError 
    * socket errors that might occur because the socket has been closed
+   * ValueError when trying to parse text where the format is not fully certain
 2. When the code in question has been designated as top layer of the application, and the stage of development has
    been declared to be pre-release hardening. 
 

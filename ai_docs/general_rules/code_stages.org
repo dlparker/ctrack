@@ -1,0 +1,31 @@
+* Concept
+
+The rules that apply to coding style vary according to the stage of development.
+
+1. Solving Stage - Code in this stage is being used to identify the problem details and solution options
+   1. Problem details are unclear because the subject matter is not understood by the 
+   human in the loop at this level of detail. Code is being written to test and refine
+   the human's notion of what the details actually are.
+   1. Solution options are highly preliminary at this stage because they may not be approprate
+   for the details as they are actually discovered and refined
+2. Structure Stage - Code in this stage is being gradually converted from the solving stage to
+   appropriate modules and classes.
+3. Refinement Stage - Code in this stage is being iteratively improved by a process of developing
+   high code coverage tests with the tests incorporating functional assessment according to design
+   spec or other guidance, updating the code for correctness and testability.
+4. Pre-release Stage - Code in this stage is being prepared for release.
+5. Released Stage - Code in this stage has already been released, so backward compatibility and
+   external library versioning considerations come into play.
+    
+Each source file will have a notice in the top of the file in comments or in a file level docstring
+that looks like this:
+
+Code Stage: Structure
+
+If no such notice is present, it means that the code stage is "Solving"
+
+         
+      
+      
+      
+          
