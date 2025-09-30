@@ -1,0 +1,12 @@
+account_path,description
+Expenses,All expenses
+Expenses:house,Tied to house
+Expenses:house:insurance,House insurance
+Expenses|online_service|entertainment|streaming,Streaming
+Expenses|misc,Misc
+Expenses|basic|internet,Internet service
+Expenses|online_service|entertainment|books,Kindle
+Expenses|online_shop|Amazon,Stuff from Amazon
+Expenses|basic|phone,Phones and service
+Expenses|online_service|hosting,hosting and related services
+Expenses|groceries|heb|online_groceries,Groceries Ordered from HEB
