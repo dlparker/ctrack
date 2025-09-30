@@ -9,8 +9,8 @@ from ctrack.ods_ops import setup_ods_matcher_edit, apply_ods_matcher_edit, run_o
 from ctrack.ods_ops import setup_ods_accounts_edit, apply_ods_accounts_edit
 
 
-def test_edit_10_ods():
-    pull_dir = Path(__file__).parent / "data_test_edit_10"
+def test_edit_ods_matcher():
+    pull_dir = Path(__file__).parent / "prep_data" / "test_edit_ods_matcher"
     data_dir = Path(__file__).parent / "target"
     for item in data_dir.glob("*"):
         item.unlink()
@@ -34,12 +34,10 @@ def test_edit_10_ods():
     finished_misses = match_input_to_accounts(data_dir)
     assert len(finished_misses) == 0
     
-
-    
         
-def test_edit_20_ods():
+def test_edit_ods_accounts():
 
-    pull_dir = Path(__file__).parent / "data_test_edit_20"
+    pull_dir = Path(__file__).parent / "prep_data" / "test_edit_ods_accounts"
     data_dir = Path(__file__).parent / "target"
     for item in data_dir.glob("*"):
         item.unlink()
