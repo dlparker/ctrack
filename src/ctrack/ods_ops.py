@@ -19,7 +19,7 @@ def setup_ods_matcher_edit(data_dir):
     with open(Path(data_dir) / "no_match_results.csv") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            ods_row = ['', 'True', 'Expense', row['description'],]
+            ods_row = [f'^{row["description"]}', 'True', 'Expenses', row['description'],]
             no_match_data.append(ods_row)
             file_count = 0
             for path in json.loads(row['files']):
@@ -56,12 +56,13 @@ def apply_ods_matcher_edit(data_dir):
             new_matchers.append([regexp, ignorecase, account_path])
     update_account_matchers(Path(data_dir) / "matcher_map.csv", new_matchers)
 
-def setup_ods_accounts_edit(data_dir, gnucash_path, new_accounts_path):
+def setup_ods_accounts_edit(data_dir, gnucash_path):
     data = OrderedDict() # from collections import OrderedDict
 
     headers = ['account_path','description']
     new_accounts = [headers,]
     a_set = set()
+    new_accounts_path = data_dir / "new_account_paths.csv"
     with open(new_accounts_path) as f:
         reader = csv.DictReader(f)
         for row in reader:

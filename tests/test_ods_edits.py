@@ -48,7 +48,7 @@ def test_edit_ods_accounts():
     shutil.copy(orig_path, gnucash_path)
     no_match_accounts, no_account_matchers, res_path = check_account_matcher(gnucash_path, data_dir)
     new_accounts_file = data_dir / "new_account_paths.csv"
-    edit_ods = setup_ods_accounts_edit(data_dir, gnucash_path, new_accounts_file)
+    edit_ods = setup_ods_accounts_edit(data_dir, gnucash_path)
     #print(edit_ods)
     
     # in command line tool do this:

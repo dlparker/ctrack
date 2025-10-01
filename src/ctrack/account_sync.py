@@ -24,20 +24,25 @@ def update_gnucash_accounts(gnucash_path, account_defs):
                 ac_path = ac_def['account_path']
                 ac_desc = ac_def['description']
                 parent = book.root_account
-                for part in ac_path.split(':'):
+                parts = ac_path.split(':')
+                for index, part in enumerate(parts):
                     account = find_account(parent, part)
                     if not account:
+                        if index == len(parts) -1:
+                            desc = ac_desc
+                        else:
+                            desc = ""
                         account = Account(name=part,
                                          type="EXPENSE",
                                          parent=parent,
                                          commodity=USD,
-                                         description=ac_desc)
+                                         description=desc)
                         print(f"Added account {account}")
                     parent = account
             book.save()
             
 
-def get_account_defs(parent, acc_type, parent_string=None):
+def get_account_defs(parent, acc_type, parent_string=None, leaf_only=True):
     recs = []
     for acc in parent.children:
         if acc.type == acc_type:
@@ -45,10 +50,12 @@ def get_account_defs(parent, acc_type, parent_string=None):
                 string = parent_string + f":{acc.name}"
             else:
                 string =  acc.name
+            if len(acc.children) > 0 and leaf_only:
+                recs += get_account_defs(acc, acc_type, string)
+                continue
             rec = dict(account_path=string,
                        description=acc.description)
             recs.append(rec)
-            recs += get_account_defs(acc, acc_type, string)
     return recs
     
 def export_gnucash_accounts(gnucash_path, export_path, account_type="EXPENSE"):

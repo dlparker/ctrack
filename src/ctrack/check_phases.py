@@ -55,11 +55,15 @@ def check_account_matcher(gnucash_path, data_dir):
             no_account_matchers.append(matcher)
 
     res_path = data_dir / "new_account_paths.csv"
-    with open(res_path, 'w') as f:
-        fieldnames = ['account_path', 'cc_desc_re']
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        for row in no_account_matchers:
-            writer.writerow({'account_path': row.value, 'cc_desc_re': row.re_str})
-    return no_match_accounts, no_account_matchers, res_path
+    if len(no_account_matchers) == 0:
+        if res_path.exists:
+            res_path.unlink()
+    else:
+        with open(res_path, 'w') as f:
+            fieldnames = ['account_path', 'cc_desc_re']
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            for row in no_account_matchers:
+                writer.writerow({'account_path': row.value, 'cc_desc_re': row.re_str})
+    return  no_account_matchers, no_match_accounts, res_path
 
