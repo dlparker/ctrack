@@ -59,15 +59,17 @@ def get_account_defs(parent, acc_type, parent_string=None, leaf_only=True):
     return recs
     
 def export_gnucash_accounts(gnucash_path, export_path, account_type="EXPENSE"):
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", category=sa_exc.SAWarning)
-        with open_book(str(gnucash_path)) as book:
-            parent = book.root_account
-            recs = get_account_defs(parent, account_type)
-        with open(export_path, 'w', encoding='UTF8', newline='') as f:
+    recs = extract_gnucash_accounts(gnucash_path, account_type)
+    with open(export_path, 'w', encoding='UTF8', newline='') as f:
             fieldnames = ['account_path', 'description']
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(recs)               
 
-
+def extract_gnucash_accounts(gnucash_path, account_type="EXPENSE"):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=sa_exc.SAWarning)
+        with open_book(str(gnucash_path)) as book:
+            parent = book.root_account
+            recs = get_account_defs(parent, account_type)
+    return recs

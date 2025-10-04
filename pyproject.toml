@@ -8,6 +8,7 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "nicegui>=3.0.0",
     "piecash>=1.2.1",
     "pyexcel>=0.7.3",
     "pyexcel-ods3>=0.6.1",

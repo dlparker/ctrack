@@ -11,6 +11,7 @@ from datetime import datetime
 @dataclass
 class AccountMatcher:
     re_str: str
+    no_case: bool
     value: str
     re_compiled: re.Pattern
 
@@ -20,12 +21,14 @@ def build_account_matchers(path):
         csv_reader = csv.DictReader(f)
         for row in csv_reader:
             re_str = row['cc_desc_re']
-            if row['re_no_case'] == "True": 
+            if row['re_no_case'] == "True":
+                no_case = True
                 re_compiled = re.compile(re_str, re.IGNORECASE)
             else:
+                no_case = False
                 re_compiled = re.compile(re_str)
             value =  row['account_path']
-            res.append(AccountMatcher(re_str, value, re_compiled))
+            res.append(AccountMatcher(re_str, no_case, value, re_compiled))
     return res
 
 def update_account_matchers(path, new_matchers):

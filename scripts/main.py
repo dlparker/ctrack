@@ -1,44 +1,141 @@
-#!/usr/bin/env python
-from ctrack.check_phases import check_account_matcher, match_input_to_accounts
-from ctrack.ods_ops import setup_ods_matcher_edit, apply_ods_matcher_edit, run_ods_matcher_edit
-from ctrack.ods_ops import setup_ods_accounts_edit, apply_ods_accounts_edit, run_ods_accounts_edit
+import platform
+import argparse
+from pathlib import Path
+from typing import Optional
+
+from nicegui import events, ui
+from ctrack.ng_main import MainWindow
+from ctrack.make_map import build_account_matchers
+from ctrack.account_sync import extract_gnucash_accounts
+from ctrack.data_service import DataService
+
+class local_file_picker(ui.dialog):
+
+    def __init__(self, directory: str, *,
+                 upper_limit: Optional[str] = ..., multiple: bool = False, show_hidden_files: bool = False) -> None:
+        """Local File Picker
+
+        This is a simple file picker that allows you to select a file from the local filesystem where NiceGUI is running.
+
+        :param directory: The directory to start in.
+        :param upper_limit: The directory to stop at (None: no limit, default: same as the starting directory).
+        :param multiple: Whether to allow multiple files to be selected.
+        :param show_hidden_files: Whether to show hidden files.
+        """
+        super().__init__()
+
+        self.path = Path(directory).expanduser()
+        if upper_limit is None:
+            self.upper_limit = None
+        else:
+            self.upper_limit = Path(directory if upper_limit == ... else upper_limit).expanduser()
+        self.show_hidden_files = show_hidden_files
+
+        with self, ui.card():
+            self.add_drives_toggle()
+            self.grid = ui.aggrid({
+                'columnDefs': [{'field': 'name', 'headerName': 'File'}],
+                'rowSelection': {'mode': 'multiRow' if multiple else 'singleRow'},
+            }, html_columns=[0]).classes('w-96').on('cellDoubleClicked', self.handle_double_click)
+            with ui.row().classes('w-full justify-end'):
+                ui.button('Cancel', on_click=self.close).props('outline')
+                ui.button('Ok', on_click=self._handle_ok)
+        self.update_grid()
+
+    def add_drives_toggle(self):
+        if platform.system() == 'Windows':
+            import win32api
+            drives = win32api.GetLogicalDriveStrings().split('\000')[:-1]
+            self.drives_toggle = ui.toggle(drives, value=drives[0], on_change=self.update_drive)
+
+    def update_drive(self):
+        self.path = Path(self.drives_toggle.value).expanduser()
+        self.update_grid()
+
+    def update_grid(self) -> None:
+        paths = list(self.path.glob('*'))
+        if not self.show_hidden_files:
+            paths = [p for p in paths if not p.name.startswith('.')]
+        paths.sort(key=lambda p: p.name.lower())
+        paths.sort(key=lambda p: not p.is_dir())
+
+        self.grid.options['rowData'] = [
+            {
+                'name': f'📁 <strong>{p.name}</strong>' if p.is_dir() else p.name,
+                'path': str(p),
+            }
+            for p in paths
+        ]
+        if (self.upper_limit is None and self.path != self.path.parent) or \
+                (self.upper_limit is not None and self.path != self.upper_limit):
+            self.grid.options['rowData'].insert(0, {
+                'name': '📁 <strong>..</strong>',
+                'path': str(self.path.parent),
+            })
+        self.grid.update()
+
+    def handle_double_click(self, e: events.GenericEventArguments) -> None:
+        self.path = Path(e.args['data']['path'])
+        if self.path.is_dir():
+            self.update_grid()
+        else:
+            self.submit([str(self.path)])
+
+    async def _handle_ok(self):
+        rows = await self.grid.get_selected_rows()
+        self.submit([r['path'] for r in rows])
+
+        
+async def pick_file() -> None:
+    result = await local_file_picker('.', multiple=True)
+    ui.notify(f'You chose {result}')
 
 
-def sync_accounts(cash_file, work_dir):
+def main(web_mode, gnucash_path, matcher_map_path, transaction_csv_path):
+    dataservice = DataService('demo_work')
+    if gnucash_path is not None:
+        recs = extract_gnucash_accounts(gnucash_path)
+        dataservice.load_accounts(recs)
+        
+    if matcher_map_path is not None:
+        map_recs = build_account_matchers(matcher_map_path)
+        dataservice.load_matchers(map_recs)
+        
+    if transaction_csv_path is not None:
+        dataservice.load_transactions(transaction_csv_path)
+        
+    main_window = None
+    @ui.page('/')
+    def index():
+        nonlocal main_window
+        if main_window is None:
+            main_window = MainWindow(dataservice)
+        main_window.show_main_page()
+        
+    @ui.page('/picker')
+    def picker():
+        ui.button('Choose file', on_click=pick_file, icon='folder')
 
-    no_account_matchers,_,_ = check_account_matcher(cashfile, work_dir)
-    while len(no_account_matchers) > 0:
-        res = input("Some matchers have no acccount, edit? ")
-        if res.lower() not in ['yes', 'y']:
-            raise SystemExit(1)
-        setup_ods_accounts_edit(work_dir, cash_file)
-        run_ods_accounts_edit(work_dir)
-        apply_ods_accounts_edit(work_dir, cash_file)
-        no_account_matchers,_,_ = check_account_matcher(cashfile, work_dir)
+    ui.run()        
 
-def ensure_matchers(cash_file, work_dir):
-    misses = match_input_to_accounts(work_dir)
-    while len(misses) > 0:
-        res = input("Input cc transaction details have no matcher, edit? ")
-        if res.lower() not in ['yes', 'y']:
-            raise SystemExit(1)
-        setup_ods_matcher_edit(work_dir)
-        run_ods_matcher_edit(work_dir)
-        apply_ods_matcher_edit(work_dir)
-        misses = match_input_to_accounts(work_dir)
-        sync_accounts(cash_file, work_dir)
+if __name__ in {"__main__", "__mp_main__"}:
+    print("Starting CCImport ...")
+    print("Opening web browser at http://localhost:8080")
+    print("Press Ctrl+C to stop the server")
+    print()
 
-if __name__=="__main__":
-    from pathlib import Path
-    import shutil
-    #import ipdb;ipdb.set_trace()
-    parent = Path(__file__).parent.parent
-    data_dir = parent / "demo_data"
-    work_dir = parent / "demo_work"
-    for item in data_dir.glob("*"):
-        shutil.copy(item, work_dir)
+    parser = argparse.ArgumentParser(description='Credit Card Importer')
 
-    cashfile = work_dir / "test.gnucash"
-    sync_accounts(cashfile, work_dir)
-    ensure_matchers(cashfile, work_dir)
-    
+    parser.add_argument('-w', '--web-page', action='store_true',
+                       help="Run as a web server and open page in browser")
+
+    parser.add_argument('--gnucash', type=str, default=None,
+                       help="Path to GnuCash database file")
+    parser.add_argument('--matcher-map', type=str, default=None,
+                       help="Path to matcher map CSV file")
+    parser.add_argument('--transactions', type=str, default=None,
+                       help="Path to transaction CSV file")
+
+    args = parser.parse_args()
+    main(web_mode=args.web_page, gnucash_path=args.gnucash, matcher_map_path=args.matcher_map,
+         transaction_csv_path=args.transactions)
