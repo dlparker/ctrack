@@ -110,8 +110,8 @@ def main(web_mode, gnucash_path, matcher_map_path, transaction_csv_path):
         nonlocal main_window
         if main_window is None:
             main_window = MainWindow(dataservice)
-        main_window.show_main_page()
-        
+        #main_window.show_main_page()
+        main_window.show_transactions_page()
     @ui.page('/picker')
     def picker():
         ui.button('Choose file', on_click=pick_file, icon='folder')

@@ -1,5 +1,8 @@
 from pathlib import Path
 import csv
+import re
+import datetime 
+from decimal import Decimal
 from typing import Optional
 from dataclasses import dataclass, field
 
@@ -26,6 +29,18 @@ class MatcherRule(Base):
     no_case = Column(Boolean)
     account_path = Column(String)
 
+    pre_compiled = None
+
+    @property
+    def compiled(self):
+        if not self.pre_compiled:
+            if self.no_case:
+                self.pre_compiled = re.compile(self.regexp, re.IGNORECASE)
+            else:
+                self.pre_compiled = re.compile(self.regexp)
+        return self.pre_compiled
+        
+
 class NewAccount(Base):
     __tablename__ = 'new_accounts'
     
@@ -38,12 +53,30 @@ class KnownAccount(Base):
     account_path = Column(String, primary_key=True)
     description = Column(String)
 
+    @property
+    def path_tail(self):
+        return ':'.join(self.account_path.split(':')[1:])
+    
+
+@dataclass
+class TransactionRow:
+    raw: str
+    date: Optional[datetime.date] = None
+    description: Optional[str] = None
+    amount: Optional[Decimal] = None
+    matcher: Optional[MatcherRule] = None
+    
+    
 @dataclass
 class TransactionSet:
     load_path: str
     column_names: list[str] = field(default_factory=list)
-    rows: list[list[str]] = field(default_factory=list)
+    rows: list[TransactionRow] = field(default_factory=list)
     column_map: Optional[ColumnMap] = None
+    date_index: int = None
+    desc_index: int = None
+    amt_index: int = None
+    
     
     
 class DataService:
@@ -95,16 +128,28 @@ class DataService:
             session.close()
         return count
 
+    def get_known_accounts(self):
+        session = self.Session()
+        res = []
+        try:
+            for account in session.query(KnownAccount):
+                res.append(account)
+        finally:
+            session.close()
+        return res
+
     def load_matchers(self, matchers):
         session = self.Session()
         try:
             for matcher in matchers:
                 if not session.query(MatcherRule).filter_by(regexp=matcher.re_str).first():
                     rec = MatcherRule(regexp=matcher.re_str, no_case=matcher.no_case, account_path=matcher.value)
+                    print(rec.no_case)
                     session.add(rec)
             session.commit()
         finally:
             session.close()
+
             
     def matchers_count(self):
         session = self.Session()
@@ -114,19 +159,71 @@ class DataService:
             session.close()
         return count
     
-    def load_transactions(self, csv_path):
+    def get_matchers(self):
+        session = self.Session()
+        res = []
+        try:
+            for matcher in session.query(MatcherRule):
+                res.append(matcher)
+        finally:
+            session.close()
+        return res
+    
+    def load_transactions(self, csv_path, do_match=True):
         rows = []
         with open(csv_path) as f:
-            csv_reader = csv.DictReader(f)
-            fieldnames = csv_reader.fieldnames
-            for row in csv_reader:
-                rows.append(row)
-        self.transaction_sets[csv_path] = TransactionSet(load_path=csv_path,
-                                                        column_names=fieldnames,
-                                                        rows=rows)
+            csv_reader = csv.reader(f)
+            field_names = None
+            for index,row in enumerate(csv_reader):
+                if index == 0:
+                    field_names = row
+                    continue
+                rows.append(TransactionRow(raw=row))
+        self.transaction_sets[csv_path] = tset = TransactionSet(load_path=csv_path,
+                                                                column_names=field_names,
+                                                                rows=rows)
+        if tset.column_map is None:
+            # try to find importable columns
+            session = self.Session()
+            try:
+                for col_map in session.query(ColumnMap):
+                    if (col_map.date_col_name in tset.column_names
+                        and col_map.desc_col_name in tset.column_names
+                        and col_map.amt_col_name in tset.column_names):
+                        tset.column_map = col_map
+                        for index, name in enumerate(tset.column_names):
+                            if name == col_map.date_col_name:
+                                tset.date_index = index
+                            elif name == col_map.desc_col_name:
+                                tset.desc_index = index
+                            if name == col_map.amt_col_name:
+                                tset.amt_index = index
+                        for row in tset.rows:
+                            row.date = datetime.datetime.strptime(row.raw[tset.date_index],
+                                                                  tset.column_map.date_format)
+                            row.description = row.raw[tset.desc_index]
+                            row.amount = Decimal(row.raw[tset.amt_index])
+                                
+            finally:
+                session.close()
+        if tset.column_map is None or not do_match:
+            return
+        matchers = self.get_matchers()
+        for row in tset.rows:
+            if row.matcher is None:
+                for matcher in matchers:
+                    desc_raw = row.raw[tset.desc_index]
+                    if matcher.compiled.match(desc_raw):
+                        row.matcher = matcher
+                        
+                
+        
     def transaction_sets_stats(self):
         set_count = len(self.transaction_sets)
         trows = 0
         for p,ts in self.transaction_sets.items():
             trows += len(ts.rows)
         return set_count, trows
+
+    def get_transaction_sets(self):
+        return self.transaction_sets
