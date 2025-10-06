@@ -310,26 +310,34 @@ class MainWindow:
             regexp_input.bind_value(medit, 'account_path')
             
             
-            def save_and_cleanup():
-                if row.matcher is None:
-                    matcher = MatcherRule(regexp=medit.regexp,
-                                          no_case=medit.no_case,
-                                          account_path=medit.account_path)
-                    row.matcher = matcher
-                self.dataservice.save_matcher_rule(row.matcher)
-                self.main_nav.remove_dyn_item(nav_name, "Transactions")
-                if medit.account_path not in options:
-                    self.make_account_edit(medit.account_path)
+        def save_and_cleanup():
+            if row.matcher is None:
+                matcher = MatcherRule(regexp=medit.regexp,
+                                      no_case=medit.no_case,
+                                      account_path=medit.account_path)
+                row.matcher = matcher
+            self.dataservice.save_matcher_rule(row.matcher)
+            self.main_nav.remove_dyn_item(nav_name, "Transactions")
+            if medit.account_path not in options:
+                self.make_account_edit(medit.account_path)
+        def cleanup():
+            self.main_nav.remove_dyn_item(nav_name, "Transactions")
                 
+        with ui.grid(columns="1fr auto auto").classes('w-full gap-0'):
+            ui.label()
+            ui.button("Cancel", on_click=cleanup).classes(right_classes)
             save_button = ui.button("Save", on_click=save_and_cleanup).classes(right_classes)
             save_button.bind_enabled(medit, 'matches')
 
     def make_account_edit(self, account_path):
 
         nav_name = account_path
+        def cleanup():
+            self.main_nav.remove_dyn_item(nav_name, "Accounts")
+
         def save_and_cleanup(account):
             self.dataservice.save_account(account)
-            self.main_nav.remove_dyn_item(nav_name, "Accounts")
+            cleanup()
 
         def show_page(account_path):
             account = self.dataservice.get_account(account_path)
@@ -345,6 +353,11 @@ class MainWindow:
                     ui.label("Description").classes(left_classes)
                     desc_input = ui.input(value=account.description).classes(right_classes)
                     desc_input.bind_value(account, 'description')
+                with ui.grid(columns="1fr auto auto").classes('w-full gap-0'):
+                    ui.label()
+                    ui.button("Cancel",on_click=lambda account=account:cleanup()
+                              ).classes(right_classes)
+                    
                     ui.button("Save",on_click=lambda account=account:save_and_cleanup(account)
                               ).classes(right_classes)
                     

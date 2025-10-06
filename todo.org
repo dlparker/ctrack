@@ -1,0 +1,13 @@
+
+1. Add edit buttons on accounts and matchers
+2. Figure out what to do with payment transaction lines
+3. Add a todo list to main page that shows unkown accouts in matchers, unmatched rows in transaction files
+4. Change transaction file list page to show only relevant columns, Add a button to export
+   modified file (provide control to allow export of not fully matched data)
+5. Add a page for creating a column map
+   
+
+   
+   
+   
+   
