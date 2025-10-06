@@ -41,14 +41,8 @@ class MatcherRule(Base):
         return self.pre_compiled
         
 
-class NewAccount(Base):
-    __tablename__ = 'new_accounts'
-    
-    account_path = Column(String, primary_key=True)
-    description = Column(String)
-
-class KnownAccount(Base):
-    __tablename__ = 'known_accounts'
+class Account(Base):
+    __tablename__ = 'accounts'
     
     account_path = Column(String, primary_key=True)
     description = Column(String)
@@ -113,30 +107,48 @@ class DataService:
         session = self.Session()
         try:
             for item in recs:
-                if not session.query(KnownAccount).filter_by(account_path=item['account_path']).first():
-                    rec = KnownAccount(account_path=item['account_path'], description=item['description'])
+                if not session.query(Account).filter_by(account_path=item['account_path']).first():
+                    rec = Account(account_path=item['account_path'], description=item['description'])
                     session.add(rec)
             session.commit()
         finally:
             session.close()
 
-    def known_accounts_count(self):
+    def accounts_count(self):
         session = self.Session()
         try:
-            count = session.query(KnownAccount).count()
+            count = session.query(Account).count()
         finally:
             session.close()
         return count
 
-    def get_known_accounts(self):
+    def get_accounts(self):
         session = self.Session()
         res = []
         try:
-            for account in session.query(KnownAccount):
+            for account in session.query(Account):
                 res.append(account)
         finally:
             session.close()
         return res
+
+    def get_account(self, path):
+        session = self.Session()
+        account = None
+        try:
+            account = session.query(Account).filter_by(account_path=path).first()
+        finally:
+            session.close()
+        return account
+
+    def save_account(self, account):
+        session = self.Session()
+        try:
+            session.add(account)
+            session.commit()
+        finally:
+            session.close()
+        return account
 
     def load_matchers(self, matchers):
         session = self.Session()
@@ -144,7 +156,6 @@ class DataService:
             for matcher in matchers:
                 if not session.query(MatcherRule).filter_by(regexp=matcher.re_str).first():
                     rec = MatcherRule(regexp=matcher.re_str, no_case=matcher.no_case, account_path=matcher.value)
-                    print(rec.no_case)
                     session.add(rec)
             session.commit()
         finally:
@@ -168,6 +179,17 @@ class DataService:
         finally:
             session.close()
         return res
+
+    def save_matcher_rule(self, matcher_rule):
+        session = self.Session()
+        res = []
+        try:
+            session.add(matcher_rule)
+            session.commit()
+        finally:
+            session.close()
+        return res
+        
     
     def load_transactions(self, csv_path, do_match=True):
         rows = []

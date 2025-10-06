@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Optional, Any
 from nicegui import ui
 from nicegui.element import Element
+from ctrack.data_service import MatcherRule, Account
 
 @dataclass
 class MainLayout:
@@ -41,6 +42,12 @@ class MainNav:
     def add_dyn_item(self, name, operation):
         self.dyn_items[name] = operation
 
+    def remove_dyn_item(self, name, route_to=None):
+        if route_to:
+            self.show_page_by_name(route_to)
+        del self.dyn_items[name]
+        self.update_menu()
+
     def update_menu(self, name=None):
         if name is not None:
             self.main_content = name
@@ -76,35 +83,6 @@ class Panel:
         self.fill_panel()
         showing = True
 
-class MatcherBuildElements:
-
-    def __init__(self, description, regexp=None, no_case=True, classes='border px-2'):
-        self.description = description
-        self.regexp = regexp
-        self.no_case = no_case
-        self.matches = True
-        self.desc_label =  ui.label(self.description).classes(classes)
-        if self.regexp is None:
-            self.regexp = f"^{re.escape(self.description)}"
-        def check_match(new_regexp):
-            if self.no_case:
-                compiled = re.compile(new_regexp, re.IGNORECASE)
-            else:
-                compiled = re.compile(new_regexp)
-            if compiled.match(self.description):
-                self.regexp = new_regexp
-                self.cb.value = True
-                return True
-            self.cb.value = False
-            return False
-        self.input = ui.input(value=self.regexp,
-                              validation={"Does not match": lambda value:check_match(value)},
-                              ).classes(classes)
-        self.switch = ui.switch("Ignore Case", value=self.no_case).classes(classes)
-        self.switch.bind_value(self, 'no_case')
-        self.cb = ui.checkbox("", value=self.matches).classes(classes)
-        check_match(self.regexp)
-
 class MainWindow:
 
     def __init__(self, dataservice):
@@ -131,7 +109,7 @@ class MainWindow:
         with self.main_panel:
             with ui.grid(columns=2):
                 ui.label('Accounts known:')
-                ui.label(self.dataservice.known_accounts_count())
+                ui.label(self.dataservice.accounts_count())
 
                 ui.label('Matchers:')
                 ui.label(self.dataservice.matchers_count())
@@ -150,7 +128,7 @@ class MainWindow:
             with ui.grid(columns='auto 1fr').classes('w-full gap-0'):
                 ui.label('Path').classes('border py-2 px-2 ')
                 ui.label('Description').classes('border py-2 px-2')
-                for account in self.dataservice.get_known_accounts():
+                for account in self.dataservice.get_accounts():
                     ui.label(account.account_path).classes('border py-1 px-2')
                     ui.label(account.description).classes('border py-1 px-2')
         self.main_nav.update_menu("Accounts")
@@ -205,21 +183,6 @@ class MainWindow:
                 for col in row.raw:
                     ui.label(col).classes('border px-2 ')
 
-        if len(unmatched) > 0:
-            
-            with ui.grid(columns="auto 5fr 1fr 1fr 1fr").classes('w-full gap-0'):
-                ui.label("Description").classes('border py-2 px-2 ')
-                ui.label("Regexp").classes('border py-2 px-2 ')
-                ui.label("Ignorcase").classes('border py-2 px-2 ')
-                ui.label("Match").classes('border py-2 px-2 ')
-                ui.label("Save").classes('border py-2 px-2 ')
-                for um in unmatched:
-                    mbe = MatcherBuildElements(um.description, regexp=None,
-                                               no_case=True, classes='border px-2')
-                    def save_matcher(mbe):
-                        print("gonna save")
-                        pass
-                    ui.button("Save", on_click=lambda mbe:save_matcher(mbe)).classes('border py-2 px-2 ')
                     
     def show_transactions_page(self):
         self.main_panel.clear()
@@ -268,7 +231,6 @@ class MainWindow:
         self.main_nav.update_menu("Transactions")
 
     def make_edit_matcher(self, tset_name, row_index):
-
         fname = Path(tset_name).parts[-1]
         nav_name = f"{fname}:\nrow-{row_index}"
         def show_page(tset_path, index):
@@ -276,11 +238,118 @@ class MainWindow:
             tset = sets[tset_path]
             self.main_panel.clear()
             with self.main_panel:
-                ui.label(tset.load_path)
-                ui.label(tset.rows[index].description)
+                self.show_edit_matcher(nav_name, tset, row_index)
         self.main_nav.add_dyn_item(nav_name, lambda tset_name=tset_name, index=row_index:show_page(tset_name, index))
         self.main_nav.update_menu(nav_name)
         self.main_nav.show_page_by_name(nav_name)
 
-    def show_edit_matcher(self, tset, row_index):
-        pass
+    def show_edit_matcher(self, nav_name, tset, row_index):
+        row = tset.rows[row_index]
+        class MEdit:
+            def __init__(self, tset, row_index):
+                self.tset = tset
+                self.row_index = row_index
+                self.row = tset.rows[row_index]
+                
+                self.regexp = None
+                self.no_case = True
+                self.switch = None
+                self.matches = True
+                self.account_path = None
+                if self.row.matcher is None:
+                    self.regexp = f"^{re.escape(self.row.description)}"
+                    self.no_case = True
+                    self.account_path = "Expenses:"
+                else:
+                    self.regexp = self.row.matcher.regexp
+                    self.no_case = self.row.matcher.no_case
+                    self.account_path = self.row.matcher.account_path
+                self.matches = True
+
+            def check_match(self, new_regexp=None):
+                if new_regexp is None:
+                    new_regexp = self.regexp
+                if self.no_case:
+                    compiled = re.compile(new_regexp, re.IGNORECASE)
+                else:
+                    compiled = re.compile(new_regexp)
+                if compiled.match(self.row.description):
+                    self.regexp = new_regexp
+                    self.matches = True
+                    return True
+                self.matches = False
+                return False
+            
+        medit = MEdit(tset, row_index)
+        left_classes = "py-2 px-2"
+        right_classes = "py-2 px-2"
+        with ui.grid(columns="auto 1fr").classes('w-full gap-0'):
+            ui.label("Description").classes(left_classes)
+            ui.label(row.description).classes(right_classes)
+
+            ui.label("Regexp").classes(left_classes)
+
+            regexp_input = ui.input(value=medit.regexp,
+                                    validation={"Does not match": lambda value:medit.check_match(value)},
+                                    ).classes(right_classes)
+            
+            ui.label("Ignorcase").classes(left_classes)
+            switch = ui.switch("", value=medit.no_case,
+                               on_change=medit.check_match,
+                               ).classes(right_classes)
+            switch.bind_value(medit, 'no_case')
+
+            ui.label("Match").classes(left_classes)
+            check_box = ui.checkbox("", value=medit.matches).classes(right_classes)
+            check_box.bind_value(medit, 'matches')
+            check_box.disable()
+
+            ui.label("Account").classes(left_classes)
+            options = [account.account_path for account in self.dataservice.get_accounts()]
+            regexp_input = ui.input(value=medit.account_path, autocomplete=options).classes(right_classes)
+            regexp_input.bind_value(medit, 'account_path')
+            
+            
+            def save_and_cleanup():
+                if row.matcher is None:
+                    matcher = MatcherRule(regexp=medit.regexp,
+                                          no_case=medit.no_case,
+                                          account_path=medit.account_path)
+                    row.matcher = matcher
+                self.dataservice.save_matcher_rule(row.matcher)
+                self.main_nav.remove_dyn_item(nav_name, "Transactions")
+                if medit.account_path not in options:
+                    self.make_account_edit(medit.account_path)
+                
+            save_button = ui.button("Save", on_click=save_and_cleanup).classes(right_classes)
+            save_button.bind_enabled(medit, 'matches')
+
+    def make_account_edit(self, account_path):
+
+        nav_name = account_path
+        def save_and_cleanup(account):
+            self.dataservice.save_account(account)
+            self.main_nav.remove_dyn_item(nav_name, "Accounts")
+
+        def show_page(account_path):
+            account = self.dataservice.get_account(account_path)
+            if not account:
+                account = Account(account_path=account_path, description="")
+            left_classes = "py-2 px-2"
+            right_classes = "py-2 px-2"
+            self.main_panel.clear()
+            with self.main_panel:
+                with ui.grid(columns="auto 1fr").classes('w-full gap-0'):
+                    ui.label("Name").classes(left_classes)
+                    ui.label(account.account_path).classes(right_classes)
+                    ui.label("Description").classes(left_classes)
+                    desc_input = ui.input(value=account.description).classes(right_classes)
+                    desc_input.bind_value(account, 'description')
+                    ui.button("Save",on_click=lambda account=account:save_and_cleanup(account)
+                              ).classes(right_classes)
+                    
+        self.main_nav.add_dyn_item(nav_name, lambda account_path=account_path:show_page(account_path))
+        self.main_nav.update_menu(nav_name)
+        self.main_nav.show_page_by_name(nav_name)
+
+            
