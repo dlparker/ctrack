@@ -249,3 +249,6 @@ class DataService:
 
     def get_transaction_sets(self):
         return self.transaction_sets
+
+    def get_transaction_set(self, file_path):
+        return self.transaction_sets[str(file_path)]
