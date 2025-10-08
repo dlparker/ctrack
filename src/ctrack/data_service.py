@@ -5,11 +5,36 @@ import datetime
 from decimal import Decimal
 from typing import Optional
 from dataclasses import dataclass, field
+from decimal import Decimal
 
-from sqlalchemy import create_engine, Column, String, Boolean
+from sqlalchemy.types import TypeDecorator
+from sqlalchemy import create_engine, Column, ForeignKey
+from sqlalchemy import Boolean, Integer, Date, String, Numeric
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, relationship
 from ctrack.cc_file_ops import card_file_col_maps
+
+# Define the custom TypeDecorator for handling Decimals in SQLite
+class SqliteDecimal(TypeDecorator):
+    impl = Integer  # Store as an integer in SQLite
+
+    def __init__(self, scale):
+        TypeDecorator.__init__(self)
+        self.scale = scale
+        self.multiplier_int = 10 ** self.scale
+
+    def process_bind_param(self, value, dialect):
+        if value is not None:
+            # Convert Decimal to integer for storage
+            return int(Decimal(value) * self.multiplier_int)
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is not None:
+            # Convert integer back to Decimal upon retrieval
+            return Decimal(value) / self.multiplier_int
+        return value
+
 
 Base = declarative_base()
 
@@ -22,12 +47,25 @@ class ColumnMap(Base):
     amt_col_name = Column(String)
     date_format = Column(String)
 
+class Account(Base):
+    __tablename__ = 'accounts'
+    
+    account_path = Column(String, primary_key=True)
+    description = Column(String)
+    in_gnucash = Column(Boolean)
+
+    @property
+    def path_tail(self):
+        return ':'.join(self.account_path.split(':')[1:])
+    
 class MatcherRule(Base):
     __tablename__ = 'matcher_rules'
     
-    regexp = Column(String, primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    regexp = Column(String, index=True)
     no_case = Column(Boolean)
     account_path = Column(String)
+    matches = relationship("ImportableTransaction", backref="matcher")
 
     pre_compiled = None
 
@@ -39,19 +77,19 @@ class MatcherRule(Base):
             else:
                 self.pre_compiled = re.compile(self.regexp)
         return self.pre_compiled
-        
 
-class Account(Base):
-    __tablename__ = 'accounts'
-    
-    account_path = Column(String, primary_key=True)
+class ImportableTransaction(Base):
+    __tablename__ = 'transactions'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    external_id = Column(String) # typically cc name string
+    import_source_file = Column(String)
+    date = Column(Date)
     description = Column(String)
-
-    @property
-    def path_tail(self):
-        return ':'.join(self.account_path.split(':')[1:])
+    amount = Column(SqliteDecimal(2))  
+    matcher_id = Column(Integer, ForeignKey("matcher_rules.id", ondelete="SET NULL"), nullable=True)
     
-
+    
 @dataclass
 class TransactionRow:
     raw: str
@@ -77,7 +115,7 @@ class DataService:
 
     def __init__(self, ops_dir):
         self.ops_dir = Path(ops_dir)
-        self.db_file = self.ops_dir / "cc_import.db"
+        self.db_file = self.ops_dir / "ctrack.db"
         self.engine = create_engine(f'sqlite:///{self.db_file}')
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
@@ -108,7 +146,8 @@ class DataService:
         try:
             for item in recs:
                 if not session.query(Account).filter_by(account_path=item['account_path']).first():
-                    rec = Account(account_path=item['account_path'], description=item['description'])
+                    rec = Account(account_path=item['account_path'], description=item['description'],
+                                  in_gnucash=True)
                     session.add(rec)
             session.commit()
         finally:
@@ -160,7 +199,6 @@ class DataService:
             session.commit()
         finally:
             session.close()
-
             
     def matchers_count(self):
         session = self.Session()
@@ -190,7 +228,6 @@ class DataService:
             session.close()
         return res
         
-    
     def load_transactions(self, csv_path, do_match=True):
         rows = []
         with open(csv_path) as f:
@@ -238,8 +275,6 @@ class DataService:
                     if matcher.compiled.match(desc_raw):
                         row.matcher = matcher
                         
-                
-        
     def transaction_sets_stats(self):
         set_count = len(self.transaction_sets)
         trows = 0
