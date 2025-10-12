@@ -94,24 +94,25 @@ async def pick_file() -> None:
 def main(web_mode, gnucash_path, matcher_map_path, transaction_csv_path):
     dataservice = DataService('demo_work')
     if gnucash_path is not None:
-        recs = extract_gnucash_accounts(gnucash_path)
-        dataservice.load_accounts(recs)
+        dataservice.set_gnucash_file(gnucash_path)
         
     if matcher_map_path is not None:
-        map_recs = build_account_matchers(matcher_map_path)
-        dataservice.load_matchers(map_recs)
+        dataservice.set_matcher_file(matcher_map_path)
         
     if transaction_csv_path is not None:
-        dataservice.load_transactions(transaction_csv_path)
+        spec = dataservice.load_transactions(transaction_csv_path)
+        if not spec:
+            dataservice.add_unmapped_transaction_file(transaction_csv_path)
         
     main_window = None
     @ui.page('/')
     def index():
         nonlocal main_window
         if main_window is None:
+            #from ctrack.ng_wf import MainWindow2
+            #main_window = MainWindow2(dataservice)
             main_window = MainWindow(dataservice)
-        #main_window.show_main_page()
-        main_window.main_nav.show_main_content("Transactions")
+        #main_window.main_nav.show_main_content("Transactions")
         
     @ui.page('/picker')
     def picker():

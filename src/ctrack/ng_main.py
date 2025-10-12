@@ -362,11 +362,11 @@ class EditAccountPage(MainPanelContent):
         self.dataservice.save_account(self.account)
         self.cleanup()
 
-main_content_items = [SummaryPage, AccountsPage, MatchersPage, TransactionFilesPage]
+default_main_content_items = [SummaryPage, AccountsPage, MatchersPage, TransactionFilesPage]
                     
 class MainWindow:
 
-    def __init__(self, dataservice):
+    def __init__(self, dataservice, main_content_items=None):
         self.dataservice = dataservice
         self.header = None
         self.left_drawer = None
@@ -381,8 +381,13 @@ class MainWindow:
         self.main_panel = ui.element('div').classes('w-full')
         self.footer = ui.footer()
         self.main_nav = MainNav(self.left_drawer, self)
-        for item in main_content_items:
+        if main_content_items is None:
+            main_content_items = default_main_content_items
+        for index, item in enumerate(main_content_items):
             page = item(self.main_panel, self.main_nav, self.dataservice)
+            if index == 0:
+                first = page
             self.main_nav.add_main_panel_content(page)
+        self.main_nav.show_main_content(first.name)
 
             
