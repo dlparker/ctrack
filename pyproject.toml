@@ -12,6 +12,8 @@ dependencies = [
     "piecash>=1.2.1",
     "pyexcel>=0.7.3",
     "pyexcel-ods3>=0.6.1",
+    "sqlalchemy-repr>=0.1.0",
+    "sqlmodel>=0.0.11",
 ]
 
 [project.scripts]

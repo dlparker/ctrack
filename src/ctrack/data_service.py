@@ -7,15 +7,17 @@ from decimal import Decimal
 from typing import Optional
 from dataclasses import dataclass, field
 from decimal import Decimal
+from datetime import datetime
 import warnings
 
-from piecash import open_book, create_book, Account
+from piecash import open_book, create_book, Account as CASH_Account
 from sqlalchemy.types import TypeDecorator
 from sqlalchemy import create_engine, Column, ForeignKey
 from sqlalchemy import Boolean, Integer, Date, String, Numeric
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy import exc as sa_exc
+from sqlalchemy_repr import RepresentableBase
 
 # Define the custom TypeDecorator for handling Decimals in SQLite
 class SqliteDecimal(TypeDecorator):
@@ -39,16 +41,16 @@ class SqliteDecimal(TypeDecorator):
         return value
 
 
-Base = declarative_base()
+Base = declarative_base(cls=RepresentableBase)
 
 class ColumnMap(Base):
     __tablename__ = 'column_maps'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     map_name = Column(String, unique=True, index=True)
-    date_col_name = Column(String)
-    desc_col_name = Column(String)
-    amt_col_name = Column(String)
+    date_column = Column(String)
+    description_column = Column(String)
+    amount_column = Column(String)
     date_format = Column(String)
 
 class Account(Base):
@@ -86,14 +88,17 @@ class MatcherRule(Base):
                 self.pre_compiled = re.compile(self.regexp)
         return self.pre_compiled
 
+
 class CCTransactionFile(Base):
     __tablename__ = 'cc_transaction_files'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     external_id = Column(String) # typically cc name string
     import_source_file = Column(String)
-    prepared_file = Column(String, nullable=True)
     col_map_id = Column(Integer, ForeignKey("column_maps.id", ondelete="SET NULL"), nullable=True)
+    transactions = relationship("CCTransaction", backref="transaction_file")
+
+
 
 class CCTransactionsRaw(Base):
     __tablename__ = 'cc_raw_transactions'
@@ -127,40 +132,12 @@ class CCTransaction(Base):
     file_id = Column(Integer, ForeignKey("cc_transaction_files.id", ondelete="CASCADE"))
     matcher_id = Column(Integer, ForeignKey("matcher_rules.id", ondelete="SET NULL"), nullable=True)
     
-    
-@dataclass
-class TransactionRow:
-    raw: str
-    date: Optional[datetime.date] = None
-    description: Optional[str] = None
-    amount: Optional[Decimal] = None
-    matcher: Optional[MatcherRule] = None
-    
-    
-@dataclass
-class TransactionSet:
-    load_path: str
-    column_names: list[str] = field(default_factory=list)
-    rows: list[TransactionRow] = field(default_factory=list)
-    column_map: Optional[ColumnMap] = None
-    date_index: int = None
-    desc_index: int = None
-    amt_index: int = None
-    
-    
-@dataclass
-class TransactionFileSpec:
-    file_path: str
-    col_map: ColumnMap
-    transactions: TransactionSet
-
-
 
 card_file_col_maps = {
     'boa': {
-            "date_col_name": "Posted Date",
-            "desc_col_name": "Payee",
-            "amt_col_name": "Amount",
+            "date_column": "Posted Date",
+            "description_column": "Payee",
+            "amount_column": "Amount",
             "date_format": "%m/%d/%Y"
             }
 }
@@ -203,8 +180,6 @@ class DataService:
         self.transaction_sets = {}
         self.gnucash_path = None
         self.matcher_file_path = None
-        self.transasction_files: list[TransactionFileSpec] = []
-        self.unmapped_t_files = []
 
     def ensure_tables(self):
         session = self.Session()
@@ -215,9 +190,9 @@ class DataService:
                     # Create new ColumnMap instance
                     new_map = ColumnMap(
                         map_name=name,
-                        date_col_name=mapping["date_col_name"],
-                        desc_col_name=mapping["desc_col_name"],
-                        amt_col_name=mapping["amt_col_name"],
+                        date_column=mapping["date_column"],
+                        description_column=mapping["description_column"],
+                        amount_column=mapping["amount_column"],
                         date_format=mapping["date_format"]
                     )
                     session.add(new_map)
@@ -233,6 +208,8 @@ class DataService:
     def load_accounts(self, recs):
         session = self.Session()
         try:
+            # we clear the existing data, gnucash is system of record for this
+            session.query(Account).delete()
             for item in recs:
                 if not session.query(Account).filter_by(account_path=item['account_path']).first():
                     rec = Account(account_path=item['account_path'], description=item['description'],
@@ -261,7 +238,7 @@ class DataService:
         return res
 
     def get_account(self, path):
-        session = self.Session()
+        session = self.Session(expire_on_commit=False)
         account = None
         try:
             account = session.query(Account).filter_by(account_path=path).first()
@@ -269,14 +246,50 @@ class DataService:
             session.close()
         return account
 
-    def save_account(self, account):
-        session = self.Session()
+    def add_account(self, account_path, description):
+        session = self.Session(expire_on_commit=False)
         try:
+            account = Account(account_path=account_path, description=description,
+                                  in_gnucash=False)
             session.add(account)
             session.commit()
         finally:
             session.close()
         return account
+
+    def update_gnucash_accounts(self):
+        def find_account(parent, name):
+            for acc in parent.children:
+                if acc.name == name:
+                    return acc
+            return None
+        
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=sa_exc.SAWarning)
+            with open_book(str(self.gnucash_path), readonly=False) as book:
+                USD = book.commodities.get(mnemonic="USD")
+                session = self.Session()
+                try:
+                    for l_accnt in session.query(Account).filter_by(in_gnucash=False):
+                        parent = book.root_account
+                        parts = l_accnt.account_path.split(':')
+                        for index, part in enumerate(parts):
+                            account = find_account(parent, part)
+                            if not account:
+                                if index == len(parts) -1:
+                                    desc = l_accnt.description
+                                else:
+                                    desc = ""
+                                account = CASH_Account(name=part,
+                                                 type="EXPENSE",
+                                                 parent=parent,
+                                                 commodity=USD,
+                                                 description=desc)
+                                print(f"Added account {account}")
+                            parent = account
+                    book.save()
+                finally:
+                    session.close()
 
     def load_matcher_file(self, matcher_file_path):
         self.matcher_file_path = matcher_file_path
@@ -315,7 +328,7 @@ class DataService:
         return count
     
     def get_matchers(self):
-        session = self.Session()
+        session = self.Session(expire_on_commit=False)
         res = []
         try:
             for matcher in session.query(MatcherRule):
@@ -324,16 +337,16 @@ class DataService:
             session.close()
         return res
 
-    def save_matcher_rule(self, matcher_rule):
-        session = self.Session()
-        res = []
+    def add_matcher(self, regexp, no_case, account_path):
+        session = self.Session(expire_on_commit=False)
         try:
-            session.add(matcher_rule)
+            rec = MatcherRule(regexp=regexp, no_case=no_case, account_path=account_path)
+            session.add(rec)
             session.commit()
         finally:
             session.close()
-        return res
-
+        return rec
+    
     def add_unmapped_transaction_file(self, csv_path, external_id="UNSET"):
         rows = []
         path = Path(csv_path).resolve()
@@ -354,6 +367,8 @@ class DataService:
                                              import_source_file=str(path))
                 session.add(file_rec)
                 session.commit()
+
+                found_matcher_id = None
             ctran = CCTransactionsRaw(col_names_json=json.dumps(field_names),
                                       rows_json=json.dumps(rows),
                                       file_id=file_rec.id)
@@ -362,19 +377,28 @@ class DataService:
         finally:
             session.close()
         return file_rec
+
+    def reload_transactions(self, csv_path, external_id="UNSET"):
+        session = self.Session(expire_on_commit=False)
+        try:
+            file_rec = session.query(CCTransactionFile).filter_by(import_source_file=str(csv_path)).delete()
+            session.commit()
+        finally:
+            session.close()
+        return self.load_transactions(csv_path, external_id)
         
     def load_transactions(self, csv_path, external_id="UNSET"):
         file_rec = self.add_unmapped_transaction_file(csv_path, external_id)
-        session = self.Session()
+        session = self.Session(expire_on_commit=False)
         try:
             raw = session.query(CCTransactionsRaw).filter_by(file_id=file_rec.id).first()
             use_col_map = None
             if file_rec.col_map_id is None:
-                column_names = raw.get_col_names()
+                columns = raw.get_col_names()
                 for col_map in session.query(ColumnMap):
-                    if (col_map.date_col_name in column_names
-                        and col_map.desc_col_name in column_names
-                        and col_map.amt_col_name in column_names):
+                    if (col_map.date_column in columns
+                        and col_map.description_column in columns
+                        and col_map.amount_column in columns):
                         file_rec.col_map_id = col_map.id
                         use_col_map = col_map
                         session.add(file_rec)
@@ -385,84 +409,90 @@ class DataService:
             rows = raw.get_rows()
             matchers = self.get_matchers()
             for row in rows:
+                desc_raw = row[use_col_map.description_column]
+                date = datetime.strptime(row[use_col_map.date_column], use_col_map.date_format)
                 found_matcher_id = None
                 for matcher in matchers:
-                    desc_raw = row[use_col_map.desc_col_name]
                     if matcher.compiled.match(desc_raw):
                         found_matcher_id = matcher.id
                         break
-                cctr = CCTransaction(date=row[use_col_map.date_col_name],
-                                     description=row[use_col_map.desc_col_name],
-                                     amount=row[use_col_map.amt_col_name],
+                    
+                cctr = CCTransaction(date=date,
+                                     description=row[use_col_map.description_column],
+                                     amount=Decimal(row[use_col_map.amount_column]),
                                      file_id=file_rec.id,
                                      matcher_id=found_matcher_id)
                 session.add(cctr)
+            session.commit()
         finally:
             session.close()
 
         return file_rec
-        
-    def oldload_transactions(self, csv_path):
-        rows = []
-        with open(csv_path) as f:
-            csv_reader = csv.reader(f)
-            field_names = None
-            for index,row in enumerate(csv_reader):
-                if index == 0:
-                    field_names = row
-                    continue
-                rows.append(TransactionRow(raw=row))
-        self.transaction_sets[csv_path] = tset = TransactionSet(load_path=csv_path,
-                                                                column_names=field_names,
-                                                                rows=rows)
-        from pprint import pprint
-        if tset.column_map is None:
-            # try to find importable columns
-            session = self.Session()
-            pprint(tset.column_names)
-            try:
-                for col_map in session.query(ColumnMap):
-                    pprint(col_map.__dict__)
-                    if (col_map.date_col_name in tset.column_names
-                        and col_map.desc_col_name in tset.column_names
-                        and col_map.amt_col_name in tset.column_names):
-                        tset.column_map = col_map
-                        print("match")
-                        for index, name in enumerate(tset.column_names):
-                            if name == col_map.date_col_name:
-                                tset.date_index = index
-                            elif name == col_map.desc_col_name:
-                                tset.desc_index = index
-                            if name == col_map.amt_col_name:
-                                tset.amt_index = index
-                        for row in tset.rows:
-                            row.date = datetime.datetime.strptime(row.raw[tset.date_index],
-                                                                  tset.column_map.date_format)
-                            row.description = row.raw[tset.desc_index]
-                            row.amount = Decimal(row.raw[tset.amt_index])
-                                
-            finally:
-                session.close()
-        if tset.column_map is None:
-            return None
-        matchers = self.get_matchers()
-        for row in tset.rows:
-            if row.matcher is None:
-                for matcher in matchers:
-                    desc_raw = row.raw[tset.desc_index]
-                    if matcher.compiled.match(desc_raw):
-                        row.matcher = matcher
-        return TransactionFileSpec(csv_path, tset.column_map, tset)
                         
-    def transaction_sets_stats(self):
-        set_count = len(self.transaction_sets)
-        trows = 0
-        for p,ts in self.transaction_sets.items():
-            trows += len(ts.rows)
-        return set_count, trows
+    def get_transactions(self, transactions_file):
+        session = self.Session(expire_on_commit=False)
+        res = []
+        try:
+            for xact in session.query(CCTransaction).filter_by(file_id=transactions_file.id):
+                res.append(xact)
+        finally:
+            session.close()
+        return res
 
-    def get_transaction_sets(self):
-        return self.transaction_sets
+    def update_transaction_matcher(self, xaction):
+        session = self.Session(expire_on_commit=False)
+        res = []
+        try:
+            xact = session.query(CCTransaction).filter_by(id=xaction.id).first()
+            xact.matcher_id = xaction.matcher_id
+            session.commit()
+        finally:
+            session.close()
+        return xact
 
-    def get_transaction_set(self, file_path):
-        return self.transaction_sets[str(file_path)]
+    def standardize_transactions(self, file_rec):
+        recs = self.get_transactions(file_rec)
+        session = self.Session()
+        rows = []
+        try:
+            for rec in recs:
+                if rec.matcher_id is None:
+                    raise Exception(f"cannot standardize file "
+                                    "{file_rec.import_source_file}, unmatched desc {rec.description}")
+                matcher = session.query(MatcherRule).filter_by(id=rec.matcher_id).first()
+                rows.append({
+                    'Date': rec.date,
+                    'Description': rec.description,
+                    'Amount': rec.amount,
+                    'GnucashAccount': matcher.account_path,
+                    })
+        finally:
+            session.close()
+        return rows
+
+    def get_column_maps(self):
+        session = self.Session(expire_on_commit=False)
+        res = []
+        try:
+            for cmap in session.query(ColumnMap):
+                res.append(cmap)
+        finally:
+            session.close()
+        return res
+
+    def add_column_map(self, map_name, date_column, description_column,
+                       amount_column, date_format):
+        
+        session = self.Session(expire_on_commit=False)
+        try:
+            rec = ColumnMap(map_name=map_name,
+                            date_column=date_column,
+                            description_column=description_column,
+                            amount_column=amount_column,
+                            date_format=date_format)
+            session.add(rec)
+            session.commit()
+        finally:
+            session.close()
+        return rec
+    
