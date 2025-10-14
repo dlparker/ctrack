@@ -38,6 +38,7 @@ def test_full_flow():
     dataservice.load_gnucash_file(data_dir / "test.gnucash")
     # 2. Load Matchers
     dataservice.load_matcher_file(data_dir / "matcher_map.csv")
+    assert dataservice.matchers_count() == 8
 
     # 3. Load a transaction file that maps to known column map
     tfile_rec = dataservice.load_transactions(data_dir / "cc_one_match_one_miss.csv")

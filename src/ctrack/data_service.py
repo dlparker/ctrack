@@ -312,17 +312,6 @@ class DataService:
         finally:
             session.close()
         
-    def load_matchers(self, matchers):
-        session = self.Session()
-        try:
-            for matcher in matchers:
-                if not session.query(MatcherRule).filter_by(regexp=matcher.re_str).first():
-                    rec = MatcherRule(regexp=matcher.re_str, no_case=matcher.no_case, account_path=matcher.value)
-                    session.add(rec)
-            session.commit()
-        finally:
-            session.close()
-            
     def matchers_count(self):
         session = self.Session()
         try:
@@ -397,17 +386,14 @@ class DataService:
         try:
             raw = session.query(CCTransactionsRaw).filter_by(file_id=file_rec.id).first()
             use_col_map = None
-            if file_rec.col_map_id is None:
-                columns = raw.get_col_names()
-                for col_map in session.query(ColumnMap):
-                    if (col_map.date_column in columns
-                        and col_map.description_column in columns
-                        and col_map.amount_column in columns):
-                        file_rec.col_map_id = col_map.id
-                        use_col_map = col_map
-                        session.add(file_rec)
-            else:
-                use_col_map = session.query(ColumnMap).filter_by(id=file_rec.col_map_id).first()
+            columns = raw.get_col_names()
+            for col_map in session.query(ColumnMap):
+                if (col_map.date_column in columns
+                    and col_map.description_column in columns
+                    and col_map.amount_column in columns):
+                    file_rec.col_map_id = col_map.id
+                    use_col_map = col_map
+                    session.add(file_rec)
             if file_rec.col_map_id is None:
                 return file_rec
             rows = raw.get_rows()
