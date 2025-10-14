@@ -59,7 +59,7 @@ class Account(Base):
     __tablename__ = 'accounts'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    account_path = Column(String, unique=True, index=True)
+    name = Column(String, unique=True, index=True)
     description = Column(String)
     in_gnucash = Column(Boolean)
     balance = Column(SqliteDecimal(2), default="0.00")
@@ -70,13 +70,13 @@ class MatcherRule(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     regexp = Column(String, index=True, unique=True)
     no_case = Column(Boolean)
-    account_path = Column(String)
+    account_name = Column(String)
     matches = relationship("CCTransaction", backref="matcher")
 
     pre_compiled = None
 
     def __str__(self):
-        return f"{self.regexp}(I={self.no_case}) -> {self.account_path}"
+        return f"{self.regexp}(I={self.no_case}) -> {self.account_name}"
     
     @property
     def compiled(self):
@@ -153,7 +153,7 @@ def get_account_defs(parent, acc_type, parent_string=None, leaf_only=True):
             if len(acc.children) > 0 and leaf_only:
                 recs += get_account_defs(acc, acc_type, string)
                 continue
-            rec = dict(account_path=string,
+            rec = dict(name=string,
                        description=acc.description)
             recs.append(rec)
     return recs
@@ -211,8 +211,8 @@ class DataService:
             # we clear the existing data, gnucash is system of record for this
             session.query(Account).delete()
             for item in recs:
-                if not session.query(Account).filter_by(account_path=item['account_path']).first():
-                    rec = Account(account_path=item['account_path'], description=item['description'],
+                if not session.query(Account).filter_by(name=item['name']).first():
+                    rec = Account(name=item['name'], description=item['description'],
                                   in_gnucash=True)
                     session.add(rec)
             session.commit()
@@ -241,15 +241,15 @@ class DataService:
         session = self.Session(expire_on_commit=False)
         account = None
         try:
-            account = session.query(Account).filter_by(account_path=path).first()
+            account = session.query(Account).filter_by(name=path).first()
         finally:
             session.close()
         return account
 
-    def add_account(self, account_path, description):
+    def add_account(self, name, description):
         session = self.Session(expire_on_commit=False)
         try:
-            account = Account(account_path=account_path, description=description,
+            account = Account(name=name, description=description,
                                   in_gnucash=False)
             session.add(account)
             session.commit()
@@ -272,7 +272,7 @@ class DataService:
                 try:
                     for l_accnt in session.query(Account).filter_by(in_gnucash=False):
                         parent = book.root_account
-                        parts = l_accnt.account_path.split(':')
+                        parts = l_accnt.name.split(':')
                         for index, part in enumerate(parts):
                             account = find_account(parent, part)
                             if not account:
@@ -300,9 +300,9 @@ class DataService:
                 for row in csv_reader:
                     re_str = row['cc_desc_re']
                     no_case = True if row['re_no_case'].lower() == "true" else False
-                    account_path = row['account_path']
+                    name = row['account_path']
                     if not session.query(MatcherRule).filter_by(regexp=re_str).first():
-                        rec = MatcherRule(regexp=re_str, no_case=no_case, account_path=account_path)
+                        rec = MatcherRule(regexp=re_str, no_case=no_case, account_name=name)
                         session.add(rec)
             session.commit()
         finally:
@@ -326,10 +326,10 @@ class DataService:
             session.close()
         return res
 
-    def add_matcher(self, regexp, no_case, account_path):
+    def add_matcher(self, regexp, no_case, name):
         session = self.Session(expire_on_commit=False)
         try:
-            rec = MatcherRule(regexp=regexp, no_case=no_case, account_path=account_path)
+            rec = MatcherRule(regexp=regexp, no_case=no_case, account_name=name)
             session.add(rec)
             session.commit()
         finally:
@@ -451,15 +451,15 @@ class DataService:
                                         f"{file_rec.import_source_file}, unmatched desc {rec.description}")
                     if not include_payments:
                         continue
-                    account_path = ""
+                    name = ""
                 else:
                     matcher = session.query(MatcherRule).filter_by(id=rec.matcher_id).first()
-                    account_path = matcher.account_path
+                    name = matcher.account_name
                 rows.append({
                     'Date': rec.date,
                     'Description': rec.description,
                     'Amount': rec.amount,
-                    'GnucashAccount': account_path,
+                    'GnucashAccount': name,
                     })
         finally:
             session.close()
@@ -477,8 +477,8 @@ class DataService:
                     writer.writerow(row)
         return rows
 
-    def do_cc_transactions(self, file_rec, cc_account_path,
-                          include_payments=False, payments_account_path=None):
+    def do_cc_transactions(self, file_rec, cc_name,
+                          include_payments=False, payments_name=None):
 
 
         def do_charge(rec, session, book, cc_account, expense_account):
@@ -509,13 +509,13 @@ class DataService:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=sa_exc.SAWarning)
             with open_book(str(self.gnucash_path), readonly=False) as book:
-                cc_account = book.accounts(fullname=cc_account_path)
+                cc_account = book.accounts(fullname=cc_name)
                 recs = self.get_transactions(file_rec)
                 session = self.Session()
                 if include_payments:
-                    if payments_account_path is None:
-                        raise Exception(f"Must supply payments_account_path")
-                    payments_account = book.accounts(fullname=payments_account_path)
+                    if payments_name is None:
+                        raise Exception(f"Must supply payments_name")
+                    payments_account = book.accounts(fullname=payments_name)
                 try:
                     for rec in recs:
                         if rec.is_payment:
@@ -523,12 +523,12 @@ class DataService:
                                 do_payment(rec, session, book, cc_account, payments_account)
                             continue
                         matcher = session.query(MatcherRule).filter_by(id=rec.matcher_id).first()
-                        t_account_path = matcher.account_path
-                        t_account = book.accounts(fullname=matcher.account_path)
+                        t_name = matcher.account_name
+                        t_account = book.accounts(fullname=matcher.account_name)
                         do_charge(rec, session, book, cc_account, t_account)
-                        result_balances[t_account_path] = t_account.get_balance()
-                    result_balances[cc_account_path] = cc_account.get_balance()
-                    result_balances[payments_account_path] = payments_account.get_balance()
+                        result_balances[t_name] = t_account.get_balance()
+                    result_balances[cc_name] = cc_account.get_balance()
+                    result_balances[payments_name] = payments_account.get_balance()
                 finally:
                     session.close()
                     book.save()

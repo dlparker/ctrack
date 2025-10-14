@@ -41,8 +41,8 @@ def test_full_flow():
     expected_accounts = ['Expenses:House:Insurance']
     found_accounts = []
     for account in dataservice.get_accounts():
-        found_accounts.append(account.account_path)
-        assert account.account_path in expected_accounts
+        found_accounts.append(account.name)
+        assert account.name in expected_accounts
     
     # 2. Load Matchers
     dataservice.load_matcher_file(data_dir / "matcher_map.csv")
@@ -73,9 +73,9 @@ def test_full_flow():
         dataservice.standardize_transactions(one_miss_file)
 
     # 5. Add matcher
-    account_path = "Expenses:books:on_line"
-    matcher = dataservice.add_matcher(regexp="^kindle", no_case=True, account_path=account_path)
-    assert account_path in str(matcher)
+    account_name = "Expenses:books:on_line"
+    matcher = dataservice.add_matcher(regexp="^kindle", no_case=True, name=account_name)
+    assert account_name in str(matcher)
     assert matcher.compiled.match(xact.description)
     xact.matcher_id = matcher.id
     new_xact = dataservice.update_transaction_matcher(xact)
@@ -84,13 +84,13 @@ def test_full_flow():
     # 6. Add account for new matcher
     missing = set()
     for matcher in dataservice.get_matchers():
-        accnt =  dataservice.get_account(matcher.account_path)
+        accnt =  dataservice.get_account(matcher.account_name)
         assert accnt is None
-        missing.add(matcher.account_path)
+        missing.add(matcher.account_name)
     for path in list(missing):
         dataservice.add_account(path, f"Test inserted {path}")
     for matcher in dataservice.get_matchers():
-        accnt =  dataservice.get_account(matcher.account_path)
+        accnt =  dataservice.get_account(matcher.account_name)
         assert accnt is not None
     
     # 7. Update gnucash accounts to include new account
@@ -98,7 +98,7 @@ def test_full_flow():
     # reload accounts from file so we can verify
     dataservice.load_gnucash_file(data_dir / "test.gnucash")
     for matcher in dataservice.get_matchers():
-        accnt =  dataservice.get_account(matcher.account_path)
+        accnt =  dataservice.get_account(matcher.account_name)
         assert accnt is not None
         assert accnt.in_gnucash
 
@@ -146,10 +146,10 @@ def test_full_flow():
     
     # make sure bogus args explode
     with pytest.raises(Exception):
-        dataservice.do_cc_transactions(pay_file, cc_account_path="Liabilities:MC1", 
+        dataservice.do_cc_transactions(pay_file, cc_name="Liabilities:MC1", 
                                               include_payments=True)
-    balances = dataservice.do_cc_transactions(pay_file, cc_account_path="Liabilities:MC1", 
-                                              include_payments=True, payments_account_path=payments_account)
+    balances = dataservice.do_cc_transactions(pay_file, cc_name="Liabilities:MC1", 
+                                              include_payments=True, payments_name=payments_account)
     from pprint import pprint
     pprint(balances)
     assert balances["Liabilities:MC1"] == Decimal('0.00')
