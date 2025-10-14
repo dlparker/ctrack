@@ -63,10 +63,6 @@ class Account(Base):
     description = Column(String)
     in_gnucash = Column(Boolean)
     balance = Column(SqliteDecimal(2), default="0.00")
-
-    @property
-    def path_tail(self):
-        return ':'.join(self.account_path.split(':')[1:])
     
 class MatcherRule(Base):
     __tablename__ = 'matcher_rules'
@@ -350,18 +346,17 @@ class DataService:
                 rows.append(dict(row))
         session = self.Session(expire_on_commit=False)
         try:
-            file_rec = session.query(CCTransactionFile).filter_by(import_source_file=str(path)).first()
-            if file_rec is not None:
+            orig_file_rec = session.query(CCTransactionFile).filter_by(import_source_file=str(path)).first()
+            if orig_file_rec is not None:
                 # we coule be reloading the file, which is legal but implies
                 # removing any previous data, cascade should do it
-                session.delete(file_rec)
-            else:
-                file_rec = CCTransactionFile(external_id=external_id,
-                                             import_source_file=str(path))
-                session.add(file_rec)
-                session.commit()
+                session.delete(orig_file_rec)
+            file_rec = CCTransactionFile(external_id=external_id,
+                                         import_source_file=str(path))
+            session.add(file_rec)
+            session.commit()
 
-                found_matcher_id = None
+            found_matcher_id = None
             ctran = CCTransactionsRaw(col_names_json=json.dumps(field_names),
                                       rows_json=json.dumps(rows),
                                       file_id=file_rec.id)
@@ -453,7 +448,9 @@ class DataService:
                 if rec.matcher_id is None:
                     if not rec.is_payment:
                         raise Exception(f"cannot standardize file "
-                                        "{file_rec.import_source_file}, unmatched desc {rec.description}")
+                                        f"{file_rec.import_source_file}, unmatched desc {rec.description}")
+                    if not include_payments:
+                        continue
                     account_path = ""
                 else:
                     matcher = session.query(MatcherRule).filter_by(id=rec.matcher_id).first()
@@ -477,8 +474,6 @@ class DataService:
                             if payments_account is None:
                                 raise Exception('if including payments, payments_account must be provided')
                             row['GnucashAccount'] = payments_account
-                        else:
-                            continue
                     writer.writerow(row)
         return rows
 
