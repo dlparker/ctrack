@@ -11,6 +11,7 @@ from datetime import datetime
 import warnings
 
 from piecash import open_book, create_book, Account as CASH_Account
+from piecash import Transaction, Split, Commodity
 from sqlalchemy.types import TypeDecorator
 from sqlalchemy import create_engine, Column, ForeignKey
 from sqlalchemy import Boolean, Integer, Date, String, Numeric
@@ -52,6 +53,7 @@ class ColumnMap(Base):
     description_column = Column(String)
     amount_column = Column(String)
     date_format = Column(String)
+    negative_amounts = Column(Boolean, default=True)
 
 class Account(Base):
     __tablename__ = 'accounts'
@@ -60,6 +62,7 @@ class Account(Base):
     account_path = Column(String, unique=True, index=True)
     description = Column(String)
     in_gnucash = Column(Boolean)
+    balance = Column(SqliteDecimal(2), default="0.00")
 
     @property
     def path_tail(self):
@@ -128,7 +131,8 @@ class CCTransaction(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     date = Column(Date)
     description = Column(String)
-    amount = Column(SqliteDecimal(2))  
+    amount = Column(SqliteDecimal(2))
+    is_payment = Column(Boolean, default=False)
     file_id = Column(Integer, ForeignKey("cc_transaction_files.id", ondelete="CASCADE"))
     matcher_id = Column(Integer, ForeignKey("matcher_rules.id", ondelete="SET NULL"), nullable=True)
     
@@ -411,15 +415,17 @@ class DataService:
             for row in rows:
                 desc_raw = row[use_col_map.description_column]
                 date = datetime.strptime(row[use_col_map.date_column], use_col_map.date_format)
+                amount = Decimal(row[use_col_map.amount_column])
+                is_payment = True if amount > 0 else False
                 found_matcher_id = None
                 for matcher in matchers:
                     if matcher.compiled.match(desc_raw):
                         found_matcher_id = matcher.id
                         break
-                    
                 cctr = CCTransaction(date=date,
                                      description=row[use_col_map.description_column],
-                                     amount=Decimal(row[use_col_map.amount_column]),
+                                     amount=amount,
+                                     is_payment=is_payment,
                                      file_id=file_rec.id,
                                      matcher_id=found_matcher_id)
                 session.add(cctr)
@@ -450,26 +456,104 @@ class DataService:
             session.close()
         return xact
 
-    def standardize_transactions(self, file_rec):
+    def standardize_transactions(self, file_rec, output_path=None,
+                                 include_payments=False,
+                                 payments_account=None):
         recs = self.get_transactions(file_rec)
         session = self.Session()
         rows = []
         try:
             for rec in recs:
                 if rec.matcher_id is None:
-                    raise Exception(f"cannot standardize file "
-                                    "{file_rec.import_source_file}, unmatched desc {rec.description}")
-                matcher = session.query(MatcherRule).filter_by(id=rec.matcher_id).first()
+                    if not rec.is_payment:
+                        raise Exception(f"cannot standardize file "
+                                        "{file_rec.import_source_file}, unmatched desc {rec.description}")
+                    account_path = ""
+                else:
+                    matcher = session.query(MatcherRule).filter_by(id=rec.matcher_id).first()
+                    account_path = matcher.account_path
                 rows.append({
                     'Date': rec.date,
                     'Description': rec.description,
                     'Amount': rec.amount,
-                    'GnucashAccount': matcher.account_path,
+                    'GnucashAccount': account_path,
                     })
         finally:
             session.close()
+        if output_path is not None:
+            with open(output_path, 'w') as f:
+                fieldnames = ["Date", "Description", "Amount", "GnucashAccount"]
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                for row in rows:
+                    if row['GnucashAccount'] == '':
+                        if include_payments:
+                            if payments_account is None:
+                                raise Exception('if including payments, payments_account must be provided')
+                            row['GnucashAccount'] = payments_account
+                        else:
+                            continue
+                    writer.writerow(row)
         return rows
 
+    def do_cc_transactions(self, file_rec, cc_account_path,
+                          include_payments=False, payments_account_path=None):
+
+
+        def do_charge(rec, session, book, cc_account, expense_account):
+            usd = book.commodities(mnemonic="USD")
+            Transaction(
+                currency=usd,
+                post_date=rec.date,
+                description=rec.description,
+                splits=[
+                    Split(account=cc_account, value=rec.amount),
+                    Split(account=expense_account, value=-rec.amount)
+                ]
+            )
+            
+        def do_payment(rec, session, book_session, cc_account, payments_account):
+            usd = book.commodities(mnemonic="USD")
+            Transaction(
+                currency=usd,
+                post_date=rec.date,
+                description="Payment",
+                splits=[
+                    Split(account=payments_account, value=-rec.amount),
+                    Split(account=cc_account, value=rec.amount)
+                ]
+            )
+
+        result_balances = {}
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=sa_exc.SAWarning)
+            with open_book(str(self.gnucash_path), readonly=False) as book:
+                cc_account = book.accounts(fullname=cc_account_path)
+                recs = self.get_transactions(file_rec)
+                session = self.Session()
+                if include_payments:
+                    if payments_account_path is None:
+                        raise Exception(f"Must supply payments_account_path")
+                    payments_account = book.accounts(fullname=payments_account_path)
+                try:
+                    for rec in recs:
+                        if rec.is_payment:
+                            if include_payments:
+                                do_payment(rec, session, book, cc_account, payments_account)
+                            continue
+                        matcher = session.query(MatcherRule).filter_by(id=rec.matcher_id).first()
+                        t_account_path = matcher.account_path
+                        t_account = book.accounts(fullname=matcher.account_path)
+                        do_charge(rec, session, book, cc_account, t_account)
+                        result_balances[t_account_path] = t_account.get_balance()
+                    result_balances[cc_account_path] = cc_account.get_balance()
+                    result_balances[payments_account_path] = payments_account.get_balance()
+                finally:
+                    session.close()
+                    book.save()
+                
+        return result_balances
+    
     def get_column_maps(self):
         session = self.Session(expire_on_commit=False)
         res = []
@@ -495,4 +579,3 @@ class DataService:
         finally:
             session.close()
         return rec
-    

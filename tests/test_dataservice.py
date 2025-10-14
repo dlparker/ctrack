@@ -4,6 +4,7 @@ import json
 import csv
 import re
 import shutil
+from decimal import Decimal
 from ctrack.check_phases import match_input_to_accounts, check_account_matcher
 from ctrack.cc_file_ops import find_card_files
 
@@ -24,6 +25,7 @@ def test_full_flow():
     # 10. Add new column map 
     # 11. Reprocess transaction file
     # 12. Make sure payment does not break anything
+    # 13. Make "standardized" importable transactions file and ensure it handled payment
     
     pull_dir = Path(__file__).parent / "prep_data" / "test_full_flow"
     data_dir = Path(__file__).parent / "target"
@@ -95,5 +97,26 @@ def test_full_flow():
     assert len(dataservice.get_transactions(no_map_file)) == 1
 
     # 12. Make sure payment does not break anything
-    dataservice.load_transactions(data_dir / "cc_with_payment.csv")
+    pay_file = dataservice.load_transactions(data_dir / "cc_with_payment.csv")
         
+    # 13. Make "standardized" importable transactions file and ensure it handled payment
+    payments_account = 'Assets:Checking:PendingChecks'
+    output_data = dataservice.standardize_transactions(pay_file, data_dir / "import_cc_with_payment.csv",
+                                                       include_payments=True, payments_account=payments_account)
+    # should have two charge rows, one payment
+    for index,row in enumerate(output_data):
+        if index < 2:
+            assert  len(row['GnucashAccount']) > 0
+        else:
+            assert row['GnucashAccount'] == payments_account
+
+
+    balances = dataservice.do_cc_transactions(pay_file, cc_account_path="Liabilities:MC1", 
+                                              include_payments=True, payments_account_path=payments_account)
+    from pprint import pprint
+    pprint(balances)
+    assert balances["Liabilities:MC1"] == Decimal('0.00')
+    assert balances[payments_account] == Decimal('1.00')
+    assert balances['Expenses:books:on_line'] == Decimal('12.98')
+    assert balances['Expenses:groceries:heb:online_groceries'] == Decimal('151.84')
+            
