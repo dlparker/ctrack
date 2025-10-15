@@ -10,7 +10,7 @@ import pytest
 from ctrack.data_service import DataService
 
     
-def test_full_flow():
+def test_data_service():
 
     # 1. Import accounts
     # 2. Load Matchers
@@ -50,7 +50,8 @@ def test_full_flow():
 
     # 3. Load a transaction file that maps to known column map
     one_miss_first = dataservice.load_transactions(data_dir / "cc_one_match_one_miss.csv")
-
+    assert one_miss_first.columns_mapped
+    
     # 4. Find transactions with no matchers
     for xact in dataservice.get_transactions(one_miss_first):
         if "heb" in xact.description.lower():
@@ -68,6 +69,8 @@ def test_full_flow():
             assert xact.matcher_id is None
             kindle_row = xact
     
+    assert one_miss_file.rows_matched(dataservice) == (1,1)
+    
     # Make sure it bitches when we try to convert an unfinished file
     with pytest.raises(Exception):
         dataservice.standardize_transactions(one_miss_file)
@@ -83,12 +86,14 @@ def test_full_flow():
 
     # 6. Add account for new matcher
     missing = set()
+    assert matcher.account_status(dataservice) == (False, False)
     for matcher in dataservice.get_matchers():
         accnt =  dataservice.get_account(matcher.account_name)
         assert accnt is None
         missing.add(matcher.account_name)
     for path in list(missing):
         dataservice.add_account(path, f"Test inserted {path}")
+    assert matcher.account_status(dataservice) == (True, False)
     for matcher in dataservice.get_matchers():
         accnt =  dataservice.get_account(matcher.account_name)
         assert accnt is not None
@@ -101,6 +106,7 @@ def test_full_flow():
         accnt =  dataservice.get_account(matcher.account_name)
         assert accnt is not None
         assert accnt.in_gnucash
+    assert matcher.account_status(dataservice) == (True, True)
 
     # 8. Make "standardized" importable transactions file
     output_data = dataservice.standardize_transactions(one_miss_file)
@@ -110,6 +116,7 @@ def test_full_flow():
     # 9. Load a transaction file with no column map
     no_map_file = dataservice.load_transactions(data_dir / "cc_no_col_map.csv")
     assert len(dataservice.get_transactions(no_map_file)) == 0
+    assert not no_map_file.columns_mapped
     
     # 10. Add new column map
     assert len(dataservice.get_column_maps()) == 1
@@ -120,6 +127,7 @@ def test_full_flow():
     # 11. Reprocess transaction file
     no_map_file = dataservice.reload_transactions(data_dir / "cc_no_col_map.csv")
     assert len(dataservice.get_transactions(no_map_file)) == 1
+    assert no_map_file.columns_mapped
 
     # 12. Make sure payment does not break anything
     pay_file = dataservice.load_transactions(data_dir / "cc_with_payment.csv")

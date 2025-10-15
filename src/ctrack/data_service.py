@@ -87,6 +87,11 @@ class MatcherRule(Base):
                 self.pre_compiled = re.compile(self.regexp)
         return self.pre_compiled
 
+    def account_status(self, dataservice):
+        accnt = dataservice.get_account(self.account_name)
+        if accnt is None:
+            return False, False
+        return True, accnt.in_gnucash
 
 class CCTransactionFile(Base):
     __tablename__ = 'cc_transaction_files'
@@ -95,10 +100,43 @@ class CCTransactionFile(Base):
     external_id = Column(String) # typically cc name string
     import_source_file = Column(String)
     col_map_id = Column(Integer, ForeignKey("column_maps.id", ondelete="SET NULL"), nullable=True)
+    saved_to_gnucash = Column(Boolean, default=False)
     transactions = relationship("CCTransaction", backref="transaction_file")
 
+    @property
+    def columns_mapped(self):
+        if self.col_map_id is None:
+            return False
+        return True
 
+    def rows_matched(self, dataservice):
+        matched = unmatched = 0
+        for xact in dataservice.get_transactions(self):
+            if xact.matcher_id is not None:
+                matched += 1
+            else:
+                unmatched += 1
+        return matched, unmatched
 
+    def is_save_ready(self, dataservice):
+        for xact in dataservice.get_transactions(self):
+            if xact.matcher_id is None:
+                return False
+            matcher = dataservice.get_matcher_by_id(xact.matcher_id)
+            accnt_name = matcher.account_name
+            account = dataservice.get_account(accnt_name)
+            if account is None:
+                return False
+            if not account.in_gnucash:
+                return False
+        return True
+        
+    def save_to_gnucash(self, dataservice, cc_account_name, payments_account_name):
+        if not self.is_save_ready(dataservice):
+            raise Exception(f'cannot save file {self.input_source_file}, not ready')
+        
+        dataservice.do_cc_transactions(self, cc_account_name, True, payments_account_name)
+        
 class CCTransactionsRaw(Base):
     __tablename__ = 'cc_raw_transactions'
 
@@ -131,7 +169,7 @@ class CCTransaction(Base):
     is_payment = Column(Boolean, default=False)
     file_id = Column(Integer, ForeignKey("cc_transaction_files.id", ondelete="CASCADE"))
     matcher_id = Column(Integer, ForeignKey("matcher_rules.id", ondelete="SET NULL"), nullable=True)
-    
+
 
 card_file_col_maps = {
     'boa': {
@@ -200,6 +238,32 @@ class DataService:
         finally:
             session.close()
 
+    def get_column_maps(self):
+        session = self.Session(expire_on_commit=False)
+        res = []
+        try:
+            for cmap in session.query(ColumnMap):
+                res.append(cmap)
+        finally:
+            session.close()
+        return res
+
+    def add_column_map(self, map_name, date_column, description_column,
+                       amount_column, date_format):
+        
+        session = self.Session(expire_on_commit=False)
+        try:
+            rec = ColumnMap(map_name=map_name,
+                            date_column=date_column,
+                            description_column=description_column,
+                            amount_column=amount_column,
+                            date_format=date_format)
+            session.add(rec)
+            session.commit()
+        finally:
+            session.close()
+        return rec
+    
     def load_gnucash_file(self, gnucash_path):
         self.gnucash_path = gnucash_path
         recs = extract_gnucash_accounts(gnucash_path)
@@ -257,6 +321,41 @@ class DataService:
             session.close()
         return account
 
+    def save_account(self, name):
+        def find_account(parent, name):
+            for acc in parent.children:
+                if acc.name == name:
+                    return acc
+            return None
+        
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=sa_exc.SAWarning)
+            with open_book(str(self.gnucash_path), readonly=False) as book:
+                USD = book.commodities.get(mnemonic="USD")
+                session = self.Session()
+                try:
+                    l_accnt = session.query(Account).filter_by(name=name).first()
+                    parent = book.root_account
+                    parts = l_accnt.name.split(':')
+                    for index, part in enumerate(parts):
+                        account = find_account(parent, part)
+                        if not account:
+                            if index == len(parts) -1:
+                                desc = l_accnt.description
+                            else:
+                                desc = ""
+                            account = CASH_Account(name=part,
+                                                   type="EXPENSE",
+                                                   parent=parent,
+                                                   commodity=USD,
+                                                   description=desc)
+                        parent = account
+                    book.save()
+                    l_accnt.in_gnucash = True
+                    session.commit()
+                finally:
+                    session.close()
+        
     def update_gnucash_accounts(self):
         def find_account(parent, name):
             for acc in parent.children:
@@ -326,6 +425,15 @@ class DataService:
             session.close()
         return res
 
+    def get_matcher_by_id(self, mid):
+        session = self.Session(expire_on_commit=False)
+        matcher = None
+        try:
+            matcher = session.query(MatcherRule).filter_by(id=mid).first()
+        finally:
+            session.close()
+        return matcher
+
     def add_matcher(self, regexp, no_case, name):
         session = self.Session(expire_on_commit=False)
         try:
@@ -367,9 +475,10 @@ class DataService:
         return file_rec
 
     def reload_transactions(self, csv_path, external_id="UNSET"):
-        session = self.Session(expire_on_commit=False)
+        session = self.Session()
         try:
-            file_rec = session.query(CCTransactionFile).filter_by(import_source_file=str(csv_path)).delete()
+            file_rec = session.query(CCTransactionFile).filter_by(import_source_file=str(csv_path)).first()
+            session.delete(file_rec)
             session.commit()
         finally:
             session.close()
@@ -529,34 +638,11 @@ class DataService:
                         result_balances[t_name] = t_account.get_balance()
                     result_balances[cc_name] = cc_account.get_balance()
                     result_balances[payments_name] = payments_account.get_balance()
+                    file_rec.saved_to_gnucash = True
+                    session.commit()
                 finally:
                     session.close()
                     book.save()
                 
         return result_balances
     
-    def get_column_maps(self):
-        session = self.Session(expire_on_commit=False)
-        res = []
-        try:
-            for cmap in session.query(ColumnMap):
-                res.append(cmap)
-        finally:
-            session.close()
-        return res
-
-    def add_column_map(self, map_name, date_column, description_column,
-                       amount_column, date_format):
-        
-        session = self.Session(expire_on_commit=False)
-        try:
-            rec = ColumnMap(map_name=map_name,
-                            date_column=date_column,
-                            description_column=description_column,
-                            amount_column=amount_column,
-                            date_format=date_format)
-            session.add(rec)
-            session.commit()
-        finally:
-            session.close()
-        return rec
