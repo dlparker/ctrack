@@ -2,8 +2,9 @@ from dataclasses import dataclass
 import re
 from pathlib import Path
 from typing import Optional, Any
-from nicegui import ui
+from nicegui import events, ui
 from nicegui.element import Element
+from ctrack.flow import MainFlow
 from ctrack.data_service import MatcherRule, Account
 
 @dataclass
@@ -22,28 +23,28 @@ class MainNav:
         self.dyn_items = {}
         self.main_content_objs = {}
 
-    def show_page_by_name(self, name):
+    async def show_page_by_name(self, name):
         if name in self.dyn_items:
             target = self.dyn_items[name]
-            target()
+            await target()
             self.main_content = name
             return
 
     def add_main_panel_content(self, content):
         self.main_content_objs[content.name] = content
 
-    def show_main_content(self, name):
-        self.main_content_objs[name].show()
+    async def show_main_content(self, name):
+        await self.main_content_objs[name].show()
         self.main_content = name
-        self.update_menu()
+        await self.update_menu()
 
-    def remove_main_panel_content(self, name, route_to=None):
+    async def remove_main_panel_content(self, name, route_to=None):
         if route_to:
-            self.show_main_content(route_to)
+            await self.show_main_content(route_to)
         del self.main_content_objs[name]
-        self.update_menu()
+        await self.update_menu()
 
-    def update_menu(self, name=None):
+    async def update_menu(self, name=None):
         if name is not None:
             self.main_content = name
         self.nav_container.clear()
@@ -62,317 +63,70 @@ class MainNav:
 
 class MainPanelContent:
 
-    def __init__(self, name, main_panel, main_nav, dataservice):
+    def __init__(self, name, main_window):
+        self.main_window = main_window
         self.name = name
-        self.main_panel = main_panel
-        self.main_nav = main_nav
-        self.dataservice = dataservice
+        self.main_panel = main_window.main_panel
+        self.main_nav = main_window.main_nav
         self.main_nav.add_main_panel_content(self)
         
-    def show(self):
+    async def show(self):
         self.main_panel.clear()
         with self.main_panel:
             ui.label('placeholder page')
 
-class AccountsPage(MainPanelContent):
+class GnuCashPage(MainPanelContent):
 
-    def __init__(self, main_panel, main_nav, dataservice):
-        super().__init__("Accounts", main_panel, main_nav, dataservice)
+    def __init__(self, main_window):
+        super().__init__("GnuCash File", main_window)
+        self.dataservice = self.main_window.ui_app.dataservice
 
-    def show(self):
+    async def select_file_content(self):
         self.main_panel.clear()
         with self.main_panel:
-            with ui.grid(columns='auto 1fr').classes('w-full gap-0'):
-                ui.label('Path').classes('border py-2 px-2 ')
-                ui.label('Description').classes('border py-2 px-2')
-                for account in self.dataservice.get_accounts():
-                    ui.label(account.account_path).classes('border py-1 px-2')
-                    ui.label(account.description).classes('border py-1 px-2')
-
-
-class MatchersPage(MainPanelContent):
-
-    def __init__(self, main_panel, main_nav, dataservice):
-        super().__init__("Matchers", main_panel, main_nav, dataservice)
-
-    def show(self):
-        self.main_panel.clear()
-        with self.main_panel:
-            with ui.grid(columns='auto auto 1fr').classes('w-full gap-0'):
-                ui.label('Regexp').classes('border py-2 px-2 ')
-                ui.label('NoCase').classes('border py-2 px-2 ')
-                ui.label('Account Path').classes('border py-2 px-2')
-                for matcher in self.dataservice.get_matchers():
-                    ui.label(matcher.regexp).classes('border py-1 px-2')
-                    ui.label(str(matcher.no_case)).classes('border py-1 px-2')
-                    ui.label(matcher.account_path).classes('border py-1 px-2')
-                    
-class SummaryPage(MainPanelContent):
-
-    def __init__(self, main_panel, main_nav, dataservice):
-        super().__init__("Summary", main_panel, main_nav, dataservice)
-
-    def show(self):
-        self.main_panel.clear()
-        with self.main_panel:
-            with ui.grid(columns=2):
-                ui.label('Accounts known:')
-                ui.label(self.dataservice.accounts_count())
-
-                ui.label('Matchers:')
-                ui.label(self.dataservice.matchers_count())
-
-                ui.label('Transaction Sets:')
-                set_count, total = self.dataservice.transaction_sets_stats()
-                ui.label(set_count)
-
-                ui.label('Total Transactions:')
-                ui.label(total)
-
-class TransactionFilesPage(MainPanelContent):
-
-    def __init__(self, main_panel, main_nav, dataservice):
-        super().__init__("Transactions", main_panel, main_nav, dataservice)
-
-    def show(self):
-        self.main_panel.clear()
-        with self.main_panel:
-            tab_items = {}
-            tab_set_names = {}
-            sets =  self.dataservice.get_transaction_sets()
-            with ui.tabs().classes('w-full') as tabs:
-                files_tab = ui.tab('Files')
-                tab_items["files"] = files_tab
-                for tset_name in sets:
-                    t_name = Path(tset_name).parts[-1]
-                    tab_items[t_name] = ui.tab(t_name)
-                    tab_set_names[t_name] = tset_name
-            with ui.tab_panels(tabs, value="Files").classes('w-full') as tabs:
-                with ui.tab_panel(files_tab):
-                    with ui.grid(columns="auto auto auto auto").classes('w-full gap-0'):
-                        ui.label("File").classes('border py-2 px-2 ')
-                        ui.label("Mapped").classes('border py-2 px-2 ')
-                        ui.label("Matched").classes('border py-2 px-2 ')
-                        ui.label("Unmatched").classes('border py-2 px-2 ')
-                        for path, tset in sets.items():
-                            ui.label(path).classes('border py-2 px-2 ')
-                            if tset.column_map:
-                                ui.label("True").classes('border py-2 px-2 ')
-                                matched = unmatched = 0
-                                for row in tset.rows:
-                                    if row.matcher:
-                                        matched += 1
-                                    else:
-                                        unmatched += 1
-                                ui.label(matched).classes('border py-2 px-2 ')
-                                ui.label(unmatched).classes('border py-2 px-2 ')
-                            else:
-                                ui.label("False").classes('border py-2 px-2 ')
-                                ui.label("").classes('border py-2 px-2 ')
-                                ui.label("").classes('border py-2 px-2 ')
-                for tab_name in tab_items:
-                    if tab_name == "files":
-                        continue
-                    tab = tab_items[tab_name]
-                    set_name = tab_set_names[tab_name]
-                    t_set = sets[set_name] 
-                    with ui.tab_panel(tab):
-                        self.show_transaction_file_path(tab, tset_name, tset)
-                
-    def show_transaction_file_path(self, tab, tset_name, tset):
-        ui.label(f'File path = {tset_name}')
-        if tset.column_map is None:
-            ui.label("No column map matches this file").classes('text-lg text-bold')
-        tmp = ["auto"] # for "matched" column
-        for fname in tset.column_names:
-            tmp.append("auto")
-        cstring = " ".join(tmp)
-        unmatched = []
-        with ui.grid(columns=cstring).classes('w-full gap-0'):
-            ui.label("Matched").classes('border py-2 px-2 ')
-            for cname in tset.column_names:
-                ui.label(cname).classes('border py-2 px-2 ')
-            if tset.column_map:
-                ui.label("").classes('border py-2 px-2 ')
-                for cname in tset.column_names:
-                    if cname == tset.column_map.date_col_name:
-                        ui.label("* DATE *").classes('border py-2 px-2 ')
-                    elif cname == tset.column_map.desc_col_name:
-                        ui.label("* DESCRIPTION *").classes('border py-2 px-2 ')
-                    elif cname == tset.column_map.amt_col_name:
-                        ui.label("* AMOUNT *").classes('border py-2 px-2 ')
-                    else:
-                        ui.label("").classes('border py-2 px-2 ')
-            for index, row in enumerate(tset.rows):
-                if row.matcher:
-                    button_text = "Edit"
-                else:
-                    button_text = "Add"
-                    unmatched.append(row)
-                # Create a button styled to look like a label
-                def setup_matcher(name, index):
-                    page = EditMatcherPage(name, index, self.main_panel, self.main_nav, self.dataservice)
-                    self.main_nav.add_main_panel_content(page)
-                    self.main_nav.show_main_content(page.name)
-                b = ui.button(button_text,
-                              on_click=lambda name=tset.load_path, index=index: setup_matcher(name, index))
-                b.props('flat dense').classes('border border-black px-2 ')
-                for col in row.raw:
-                    ui.label(col).classes('border px-2 ')
-                    
-class MatchForEdit:
-    
-    def __init__(self, tset, row_index):
-        self.tset = tset
-        self.row_index = row_index
-        self.row = tset.rows[row_index]
-
-        self.regexp = None
-        self.no_case = True
-        self.switch = None
-        self.matches = True
-        self.account_path = None
-        if self.row.matcher is None:
-            self.regexp = f"^{re.escape(self.row.description)}"
-            self.no_case = True
-            self.account_path = "Expenses:"
-        else:
-            self.regexp = self.row.matcher.regexp
-            self.no_case = self.row.matcher.no_case
-            self.account_path = self.row.matcher.account_path
-        self.matches = True
-
-    def check_match(self, new_regexp=None):
-        if new_regexp is None:
-            new_regexp = self.regexp
-        if self.no_case:
-            compiled = re.compile(new_regexp, re.IGNORECASE)
-        else:
-            compiled = re.compile(new_regexp)
-        if compiled.match(self.row.description):
-            self.regexp = new_regexp
-            self.matches = True
-            return True
-        self.matches = False
-        return False
-    
-class EditMatcherPage(MainPanelContent):
-
-    def __init__(self, transaction_set_load_path, row_index, main_panel, main_nav, dataservice):
-        self.path = Path(transaction_set_load_path)
-        self.row_index = row_index
-        fname = self.path.parts[-1]
-        self.nav_name = f"{fname}:\nrow-{row_index}"
-        super().__init__(self.nav_name, main_panel, main_nav, dataservice)
-        self.tset = self.dataservice.get_transaction_set(self.path)
-        self.row = self.tset.rows[row_index]
-
-    def show(self):
-        self.main_panel.clear()
-        with self.main_panel:
-            
-            self.medit = MatchForEdit(self.tset, self.row_index)
-            left_classes = "py-2 px-2"
-            right_classes = "py-2 px-2"
-            with ui.grid(columns="auto 1fr").classes('w-full gap-0'):
-                ui.label("Description").classes(left_classes)
-                ui.label(self.row.description).classes(right_classes)
-
-                ui.label("Regexp").classes(left_classes)
-
-                regexp_input = ui.input(value=self.medit.regexp,
-                                        validation={"Does not match": lambda value:self.medit.check_match(value)},
-                                        ).classes(right_classes)
-
-                ui.label("Ignorcase").classes(left_classes)
-                switch = ui.switch("", value=self.medit.no_case,
-                                   on_change=self.medit.check_match,
-                                   ).classes(right_classes)
-                switch.bind_value(self.medit, 'no_case')
-
-                ui.label("Match").classes(left_classes)
-                check_box = ui.checkbox("", value=self.medit.matches).classes(right_classes)
-                check_box.bind_value(self.medit, 'matches')
-                check_box.disable()
-
-                ui.label("Account").classes(left_classes)
-                options = [account.account_path for account in self.dataservice.get_accounts()]
-                regexp_input = ui.input(value=self.medit.account_path, autocomplete=options).classes(right_classes)
-                regexp_input.bind_value(self.medit, 'account_path')
-
-            with ui.grid(columns="1fr auto auto").classes('w-full gap-0'):
-                ui.label()
-                ui.button("Cancel", on_click=self.cleanup).classes(right_classes)
-                save_button = ui.button("Save", on_click=self.save_and_cleanup).classes(right_classes)
-                save_button.bind_enabled(self.medit, 'matches')
-            
-    def save_and_cleanup(self):
-        if self.row.matcher is None:
-            matcher = MatcherRule(regexp=self.medit.regexp,
-                                  no_case=self.medit.no_case,
-                                  account_path=self.medit.account_path)
-            self.row.matcher = matcher
-        self.dataservice.save_matcher_rule(self.row.matcher)
-        options = [account.account_path for account in self.dataservice.get_accounts()]
-        if self.medit.account_path not in options:
-            page = EditAccountPage(self.medit.account_path, self.main_panel, self.main_nav, self.dataservice)
-            self.main_nav.add_main_panel_content(page)
-            self.main_nav.show_main_content(page.name)
-            self.main_nav.remove_main_panel_content(self.nav_name)
-        else:
-            self.main_nav.remove_main_panel_content(self.nav_name, "Transactions")
-
-    def cleanup(self):
-        self.main_nav.remove_main_panel_content(self.nav_name, "Transactions")
-                
-                
-class EditAccountPage(MainPanelContent):
-
-    def __init__(self, account_path, main_panel, main_nav, dataservice):
-        self.account_path = account_path
-        self.nav_name = account_path.split(':')[-1]
-        super().__init__(self.nav_name, main_panel, main_nav, dataservice)
-        self.account = None
-
-    def show(self):
-        self.main_panel.clear()
-        with self.main_panel:
-            self.account = self.dataservice.get_account(self.account_path)
-            if not self.account:
-                self.account = Account(account_path=self.account_path, description="")
-            left_classes = "py-2 px-2"
-            right_classes = "py-2 px-2"
-            self.main_panel.clear()
-            with self.main_panel:
-                with ui.grid(columns="auto 1fr").classes('w-full gap-0'):
-                    ui.label("Name").classes(left_classes)
-                    ui.label(self.account.account_path).classes(right_classes)
-                    ui.label("Description").classes(left_classes)
-                    desc_input = ui.input(value=self.account.description).classes(right_classes)
-                    desc_input.bind_value(self.account, 'description')
-                with ui.grid(columns="1fr auto auto").classes('w-full gap-0'):
-                    ui.label()
-                    ui.button("Cancel",on_click=self.cleanup).classes(right_classes)
-                    ui.button("Save",on_click=self.save_and_cleanup).classes(right_classes)
+            with ui.grid(columns='auto auto 4fr'):
+                gcpicker = GnuCashPicker(self.main_window.ui_app.dataservice, self.show)
+                ui.label('Gnucash').classes('py-2 px-2 ')
+                ui.button('Choose File', on_click=gcpicker.pick_file, icon='folder')
         
-    def cleanup(self):
-        self.main_nav.remove_main_panel_content(self.nav_name, "Accounts")
+    async def show(self):
+        if self.dataservice.gnucash_path is None:
+            await self.select_file_content()
+            return
+        self.main_panel.clear()
+        with self.main_panel:
+            with ui.grid(columns='auto auto '):
+                ui.label('Gnucash File').classes('py-2 px-2 ')
+                ui.label(self.dataservice.gnucash_path).classes('py-2 px-2 ')
+        
 
-    def save_and_cleanup(self):
-        self.dataservice.save_account(self.account)
-        self.cleanup()
 
-default_main_content_items = [SummaryPage, AccountsPage, MatchersPage, TransactionFilesPage]
+default_main_content_items = [GnuCashPage,]
                     
+class UIApp:
+
+    def __init__(self, data_dir, gnucash_path=None):
+        self.main_flow = MainFlow(data_dir, gnucash_path)
+        self.dataservice = self.main_flow.dataservice
+        self.main_window = MainWindow(self)
+
+    async def start(self):
+        await self.main_window.start()
+        
 class MainWindow:
 
-    def __init__(self, dataservice, main_content_items=None):
-        self.dataservice = dataservice
+    def __init__(self, ui_app, main_content_items=None):
+        self.ui_app = ui_app
+        self.main_flow = ui_app.main_flow
         self.header = None
         self.left_drawer = None
         self.main_panel = None
         self.footer = None
-        
+        if main_content_items is None:
+            main_content_items = default_main_content_items
+        self.main_content_items = main_content_items
+
+    async def start(self):
         def toggle_left():
             self.left_drawer.toggle()
         with ui.header().classes(replace='row items-center') as self.header:
@@ -381,13 +135,175 @@ class MainWindow:
         self.main_panel = ui.element('div').classes('w-full')
         self.footer = ui.footer()
         self.main_nav = MainNav(self.left_drawer, self)
-        if main_content_items is None:
-            main_content_items = default_main_content_items
-        for index, item in enumerate(main_content_items):
-            page = item(self.main_panel, self.main_nav, self.dataservice)
+        for index, item in enumerate(self.main_content_items):
+            page = item(self)
             if index == 0:
                 first = page
             self.main_nav.add_main_panel_content(page)
-        self.main_nav.show_main_content(first.name)
+        await self.main_nav.show_main_content(first.name)
 
             
+class local_file_picker(ui.dialog):
+
+    def __init__(self, directory: str, *,
+                 upper_limit: Optional[str] = ..., multiple: bool = False,
+                 files_only: bool = True,
+                 show_hidden_files: bool = False) -> None:
+        """Local File Picker
+
+        This is a simple file picker that allows you to select a file from the local filesystem where NiceGUI is running.
+
+        :param directory: The directory to start in.
+        :param upper_limit: The directory to stop at (None: no limit, default: same as the starting directory).
+        :param multiple: Whether to allow multiple files to be selected.
+        :param files_only: allow only file selection, or also allow directory selection
+        :param show_hidden_files: Whether to show hidden files.
+        """
+        super().__init__()
+        self.path = Path(directory).resolve()
+        if upper_limit is None:
+            self.upper_limit = None
+        else:
+            self.upper_limit = Path(directory if upper_limit == ... else upper_limit).expanduser()
+        self.show_hidden_files = show_hidden_files
+
+        """
+        """
+        with self, ui.card():
+            self.grid = ui.aggrid({
+                'columnDefs': [{'field': 'name', 'headerName': 'File'}],
+                'rowSelection': {
+                    'mode': 'multiRow' if multiple else 'singleRow',
+                    ':isRowSelectable': "params => !params.data.name.startsWith('📁')",
+                    'hideDisabledCheckboxes': True,
+                }
+            }, html_columns=[0]).classes('w-96').on('cellDoubleClicked', self.handle_double_click)
+            with ui.row().classes('w-full justify-end'):
+                ui.button('Cancel', on_click=self.close).props('outline')
+                ui.button('Ok', on_click=self._handle_ok)
+        self.update_grid()
+
+    def update_grid(self) -> None:
+        paths = list(self.path.glob('*'))
+        if not self.show_hidden_files:
+            paths = [p for p in paths if not p.name.startswith('.')]
+        paths.sort(key=lambda p: p.name.lower())
+        paths.sort(key=lambda p: not p.is_dir())
+
+        self.grid.options['rowData'] = [
+            {
+                'name': f'📁 <strong>{p.name}</strong>' if p.is_dir() else p.name,
+                'path': str(p),
+            }
+            for p in paths
+        ]
+        if (self.upper_limit is None and self.path != self.path.parent) or \
+                (self.upper_limit is not None and self.path != self.upper_limit):
+            self.grid.options['rowData'].insert(0, {
+                'name': '📁 <strong>..</strong>',
+                'path': str(self.path.parent),
+            })
+        self.grid.update()
+
+    def handle_double_click(self, e: events.GenericEventArguments) -> None:
+        self.path = Path(e.args['data']['path'])
+        if self.path.is_dir():
+            self.update_grid()
+        else:
+            self.submit([str(self.path)])
+
+    async def _handle_ok(self):
+        rows = await self.grid.get_selected_rows()
+        self.submit([r['path'] for r in rows])
+
+
+class GnuCashPicker:
+
+    def __init__(self, dataservice, done_callback=None):
+        self.dataservice = dataservice
+        self.done_callback = done_callback
+        if self.dataservice.gnucash_path is not None:
+            raise Exception('only one gnucash file allowed for one database')
+        self.spath = "."
+        self.ulimit = Path("~").expanduser()
+
+    async def pick_file(self) -> None:
+        result = await local_file_picker(self.spath, upper_limit = self.ulimit, multiple=False)
+        if result:
+            self.dataservice.load_gnucash_file(result[0])
+            if self.done_callback:
+                await self.done_callback()
+            
+
+class SetupPage(MainPanelContent):
+
+    def __init__(self, main_window):
+        super().__init__("Setup", main_window)
+
+        self.popup_text = "Are you sure?"
+        self.popup_dialog = None
+
+    async def show(self):
+        self.main_panel.clear()
+        with self.main_panel:
+            with ui.grid(columns='auto auto 4fr'):
+                ui.label("Type").classes('py-2 px-2 ')
+                ui.label("Choose or Change").classes('py-2 px-2 ')
+                ui.label("File path").classes('py-2 px-2 ')
+
+                gcpicker = GnuCashPicker(self.main_window.ui_app.dataservice, self.show)
+                ui.label('Gnucash').classes('py-2 px-2 ')
+                ui.button('Choose File', on_click=gcpicker.pick_file, icon='folder')
+                ui.label('/foo/bar/boo/bee/bop/thisisprettylong.gnucash').classes('py-2 px-2 ')
+
+                ui.label('Transaction').classes('py-2 px-2 ')
+                ui.button('Choose File', on_click=gcpicker.pick_file, icon='folder')
+                ui.label('/foo/bar/boo/bee/bop/thisisprettylong.csv').classes('py-2 px-2 ')
+
+            # Define a single yes/no dialog that gets re-used for all the popups.
+            with ui.dialog() as self.popup_dialog, ui.card():
+                # Bind the text for the question, so that when `self.popup_text`
+                # gets updated by `show_popup`, the text in the dialog also gets
+                # updated.
+                ui.label().bind_text_from(self, "popup_text")
+                with ui.row():
+                    ui.button("Yes", on_click=lambda: self.popup_dialog.submit("Yes"))
+                    ui.button("No", on_click=lambda: self.popup_dialog.submit("No"))
+
+            # Create a simple menu with some buttons, which call `show_popup` when
+            # clicked and change the text for the question. The passed in `func`
+            # is only executed by `show_popup` if the "Yes" button is pressed.
+            with ui.button(icon="menu"):
+                with ui.menu() as menu:
+                    ui.menu_item(
+                        "Destroy widget",
+                        lambda: self.show_popup(
+                            "Do you really want to destroy the widget?",
+                            self._action_widget_destroy
+                        ),
+                    )
+                    ui.menu_item(
+                        "Reset to defaults",
+                        lambda: self.show_popup(
+                            "Are you sure you want to reset to defaults?",
+                            self._action_config_reset,
+                        ),
+                    )
+
+    async def show_popup(self, _popup_text: str, func):
+            """Call this function to trigger the popup.
+
+            The functon `func` is only called if "Yes" is clicked in the dialog.
+            """
+            self.popup_text = _popup_text
+            result = await self.popup_dialog
+            if result == "Yes":
+                func()
+
+    def _action_widget_destroy(self):
+        """Action: destroy the widget."""
+
+    def _action_config_reset(self):
+        """Action: reset to defaults."""
+        
+

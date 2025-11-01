@@ -44,6 +44,11 @@ class SqliteDecimal(TypeDecorator):
 
 Base = declarative_base(cls=RepresentableBase)
 
+class MetaData(Base):
+    __tablename__ = 'meta_data'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    gnucash_file = Column(String)
+
 class ColumnMap(Base):
     __tablename__ = 'column_maps'
     
@@ -214,10 +219,10 @@ class DataService:
         self.engine = create_engine(f'sqlite:///{self.db_file}')
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
-        self.ensure_tables()
         self.transaction_sets = {}
         self.gnucash_path = None
         self.matcher_file_path = None
+        self.ensure_tables()
 
     def ensure_tables(self):
         session = self.Session()
@@ -235,8 +240,13 @@ class DataService:
                     )
                     session.add(new_map)
             session.commit()
+            meta = session.query(MetaData).first()
+            if meta is not None:
+                self.gnucash_path = meta.gnucash_file
+                print('found file')
         finally:
             session.close()
+        
 
     def get_column_maps(self):
         session = self.Session(expire_on_commit=False)
@@ -264,9 +274,24 @@ class DataService:
             session.close()
         return rec
     
-    def load_gnucash_file(self, gnucash_path):
+    def set_gnucash_file(self, gnucash_path):
+        session = self.Session()
+        try:
+            meta = session.query(MetaData).first()
+            if meta is None:
+                meta = MetaData(gnucash_file=str(gnucash_path))
+                session.add(meta)
+                session.commit()
+            elif Path(meta.gnucash_file).resolve() != Path(gnucash_path).resolve():
+                raise Exception('cannot change gnucash file')
+        finally:
+            session.close()
         self.gnucash_path = gnucash_path
         recs = extract_gnucash_accounts(gnucash_path)
+        self.load_accounts(recs)
+        
+    def load_gnucash_file(self):
+        recs = extract_gnucash_accounts(self.gnucash_path)
         self.load_accounts(recs)
         
     def load_accounts(self, recs):

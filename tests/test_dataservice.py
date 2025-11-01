@@ -36,7 +36,7 @@ def test_data_service():
     dataservice = DataService(data_dir)
 
     # 1. Import accounts
-    dataservice.load_gnucash_file(data_dir / "test.gnucash")
+    dataservice.set_gnucash_file(data_dir / "test.gnucash")
     assert dataservice.accounts_count() == 1
     expected_accounts = ['Expenses:House:Insurance']
     found_accounts = []
@@ -101,7 +101,7 @@ def test_data_service():
     # 7. Update gnucash accounts to include new account
     dataservice.update_gnucash_accounts()
     # reload accounts from file so we can verify
-    dataservice.load_gnucash_file(data_dir / "test.gnucash")
+    dataservice.load_gnucash_file()
     for matcher in dataservice.get_matchers():
         accnt =  dataservice.get_account(matcher.account_name)
         assert accnt is not None

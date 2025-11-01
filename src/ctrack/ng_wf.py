@@ -33,8 +33,8 @@ class AccountStatus:
 
 class FirstPage(MainPanelContent):
 
-    def __init__(self, main_panel, main_nav, dataservice):
-        super().__init__("FirstPage", main_panel, main_nav, dataservice)
+    def __init__(self, main_panel, main_nav):
+        super().__init__("FirstPage", main_panel, main_nav)
 
     def show(self):
         self.main_panel.clear()
@@ -45,10 +45,36 @@ class FirstPage(MainPanelContent):
 
 main_content_items = [FirstPage]
 
-class MainWindow2(MainWindow):
+class UIApp:
 
-    def __init__(self, dataservice):
-        super().__init__(dataservice, main_content_items)
+    def __init__(self, data_dir, gnucash_path=None):
+        self.main_flow = MainFlow(data_dir, gnucash_path)
+        self.main_window = MainWindow(self)
+        
+class MainWindow2:
+
+    def __init__(self, ui_app, initial_pages=None):
+        self.ui_app = ui_app
+        self.header = None
+        self.left_drawer = None
+        self.main_panel = None
+        self.footer = None
+        def toggle_left():
+            self.left_drawer.toggle()
+        with ui.header().classes(replace='row items-center') as self.header:
+            ui.button(on_click=toggle_left, icon='menu').props('flat color=white')
+        self.left_drawer = ui.left_drawer().classes('bg-blue-100') 
+        self.main_panel = ui.element('div').classes('w-full')
+        self.footer = ui.footer()
+        self.main_nav = MainNav(self.left_drawer, self)
+        if main_content_items is None:
+            main_content_items = default_main_content_items
+        for index, item in enumerate(main_content_items):
+            page = item(self.main_panel, self.main_nav)
+            if index == 0:
+                first = page
+            self.main_nav.add_main_panel_content(page)
+        self.main_nav.show_main_content(first.name)
         
 
             

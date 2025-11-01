@@ -1,3 +1,4 @@
+from pathlib import Path
 from enum import StrEnum, auto
 from ctrack.data_service import DataService
 
@@ -23,11 +24,11 @@ class NextStep(StrEnum):
 class MainFlow:
 
     def __init__(self, data_dir, gnucash_path=None):
-        self.data_dir = data_dir
-        self.gnucash_path = gnucash_path
+        self.data_dir = Path(data_dir)
         self.dataservice = DataService(self.data_dir)
-        if self.gnucash_path is not None:
-            self.data_service.load_gnucash_file(self.gnucash_path)
+        if gnucash_path is not None:
+            self.data_service.load_gnucash_file(gnucash_path)
+        self.gnucash_path = self.dataservice.gnucash_path
         self.xaction_files = []
 
     def get_next_step(self):
@@ -51,7 +52,7 @@ class MainFlow:
         
     def set_gnucash(self, path):
         self.gnucash_path = path
-        self.dataservice.load_gnucash_file(self.gnucash_path)
+        self.dataservice.set_gnucash_file(self.gnucash_path)
 
     def add_xaction_file(self, path):
         file_rec = self.dataservice.load_transactions(path)
