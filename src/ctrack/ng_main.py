@@ -77,8 +77,10 @@ class MainPanelContent:
 
 class GnuCashPage(MainPanelContent):
 
+    page_name = "GnuCash File"
+
     def __init__(self, main_window):
-        super().__init__("GnuCash File", main_window)
+        super().__init__(self.page_name, main_window)
         self.dataservice = self.main_window.ui_app.dataservice
 
     async def select_file_content(self):
@@ -99,9 +101,80 @@ class GnuCashPage(MainPanelContent):
                 ui.label('Gnucash File').classes('py-2 px-2 ')
                 ui.label(self.dataservice.gnucash_path).classes('py-2 px-2 ')
         
+class StatusPage(MainPanelContent):
+
+    page_name = "Status"
+    def __init__(self, main_window):
+        super().__init__(self.page_name, main_window)
+        self.dataservice = self.main_window.ui_app.dataservice
+        
+    async def show(self):
+        self.main_panel.clear()
+        with self.main_panel:
+            with ui.grid(columns='auto auto 4fr'):
+                ui.label('Gnucash File').classes('py-2 px-2 ')
+                ui.button('Details',
+                          on_click=lambda:self.main_nav.show_main_content(GnuCashPage.page_name))
+                ui.label(self.dataservice.gnucash_path).classes('py-2 px-2 ')
 
 
-default_main_content_items = [GnuCashPage,]
+
+class TFilesPage(MainPanelContent):
+
+    page_name = "Transaction Files"
+    
+    def __init__(self, main_window):
+        super().__init__(self.page_name, main_window)
+        self.dataservice = self.main_window.ui_app.dataservice
+        
+    async def show(self):
+        self.main_panel.clear()
+        with self.main_panel:
+            tfpicker = TransactionFilePicker(self.main_window.ui_app.dataservice, self.show)
+            ui.button("Add file", on_click=tfpicker.pick_file,
+                      icon='folder').classes('py-2 px-2 ')
+
+            with ui.grid(columns='auto auto 4fr'):
+                ui.label('Status').classes('py-2 px-2 ')
+                ui.label('Action').classes('py-2 px-2 ')
+                ui.label('Path').classes('py-2 px-2 ')
+                for rawfile in self.dataservice.get_transaction_files(unsaved_only=True):
+                    ui.label('Not saved').classes('py-2 px-2 ')
+                    ui.label('foo').classes('py-2 px-2 ')
+                    ui.label(rawfile.import_source_file).classes('py-2 px-2 ')
+                for savedfile in self.dataservice.get_transaction_files(saved_only=True):
+                    ui.label('Saved').classes('py-2 px-2 ')
+                    ui.label('foo').classes('py-2 px-2 ')
+                    ui.label(savedfile.import_source_file).classes('py-2 px-2 ')
+
+class MatchersPage(MainPanelContent):
+
+    page_name = "Matchers"
+    
+    def __init__(self, main_window):
+        super().__init__(self.page_name, main_window)
+        self.dataservice = self.main_window.ui_app.dataservice
+        
+    async def show(self):
+        self.main_panel.clear()
+        with self.main_panel:
+            mfpicker = MatcherFilePicker(self.main_window.ui_app.dataservice, self.show)
+            ui.button("Add from file", on_click=mfpicker.pick_file,
+                      icon='folder').classes('py-2 px-2 ')
+
+            with ui.grid(columns='auto auto 1fr').classes('w-full gap-0'):
+                ui.label('Regexp').classes('border py-2 px-2 ')
+                ui.label('NoCase').classes('border py-2 px-2 ')
+                ui.label('Account Path').classes('border py-2 px-2')
+                for matcher in self.dataservice.get_matchers():
+                    ui.label(matcher.regexp).classes('border py-1 px-2')
+                    ui.label(str(matcher.no_case)).classes('border py-1 px-2')
+                    ui.label(matcher.account_name).classes('border py-1 px-2')
+
+
+
+
+default_main_content_items = [StatusPage, GnuCashPage, TFilesPage, MatchersPage]
                     
 class UIApp:
 
@@ -216,7 +289,6 @@ class local_file_picker(ui.dialog):
         rows = await self.grid.get_selected_rows()
         self.submit([r['path'] for r in rows])
 
-
 class GnuCashPicker:
 
     def __init__(self, dataservice, done_callback=None):
@@ -234,76 +306,38 @@ class GnuCashPicker:
             if self.done_callback:
                 await self.done_callback()
             
+class TransactionFilePicker:
 
-class SetupPage(MainPanelContent):
+    def __init__(self, dataservice, done_callback=None):
+        self.dataservice = dataservice
+        self.done_callback = done_callback
+        self.spath = "."
+        self.ulimit = Path("~").expanduser()
 
-    def __init__(self, main_window):
-        super().__init__("Setup", main_window)
+    async def pick_file(self) -> None:
+        result = await local_file_picker(self.spath, upper_limit = self.ulimit,
+                                         multiple=False)
+        if result:
+            self.dataservice.add_unmapped_transaction_file(result[0])
+            if self.done_callback:
+                await self.done_callback()
+            
 
-        self.popup_text = "Are you sure?"
-        self.popup_dialog = None
+class MatcherFilePicker:
 
-    async def show(self):
-        self.main_panel.clear()
-        with self.main_panel:
-            with ui.grid(columns='auto auto 4fr'):
-                ui.label("Type").classes('py-2 px-2 ')
-                ui.label("Choose or Change").classes('py-2 px-2 ')
-                ui.label("File path").classes('py-2 px-2 ')
+    def __init__(self, dataservice, done_callback=None):
+        self.dataservice = dataservice
+        self.done_callback = done_callback
+        self.spath = "."
+        self.ulimit = Path("~").expanduser()
 
-                gcpicker = GnuCashPicker(self.main_window.ui_app.dataservice, self.show)
-                ui.label('Gnucash').classes('py-2 px-2 ')
-                ui.button('Choose File', on_click=gcpicker.pick_file, icon='folder')
-                ui.label('/foo/bar/boo/bee/bop/thisisprettylong.gnucash').classes('py-2 px-2 ')
+    async def pick_file(self) -> None:
+        result = await local_file_picker(self.spath, upper_limit = self.ulimit,
+                                         multiple=False)
+        if result:
+            self.dataservice.load_matcher_file(result[0])
+            if self.done_callback:
+                await self.done_callback()
+            
 
-                ui.label('Transaction').classes('py-2 px-2 ')
-                ui.button('Choose File', on_click=gcpicker.pick_file, icon='folder')
-                ui.label('/foo/bar/boo/bee/bop/thisisprettylong.csv').classes('py-2 px-2 ')
-
-            # Define a single yes/no dialog that gets re-used for all the popups.
-            with ui.dialog() as self.popup_dialog, ui.card():
-                # Bind the text for the question, so that when `self.popup_text`
-                # gets updated by `show_popup`, the text in the dialog also gets
-                # updated.
-                ui.label().bind_text_from(self, "popup_text")
-                with ui.row():
-                    ui.button("Yes", on_click=lambda: self.popup_dialog.submit("Yes"))
-                    ui.button("No", on_click=lambda: self.popup_dialog.submit("No"))
-
-            # Create a simple menu with some buttons, which call `show_popup` when
-            # clicked and change the text for the question. The passed in `func`
-            # is only executed by `show_popup` if the "Yes" button is pressed.
-            with ui.button(icon="menu"):
-                with ui.menu() as menu:
-                    ui.menu_item(
-                        "Destroy widget",
-                        lambda: self.show_popup(
-                            "Do you really want to destroy the widget?",
-                            self._action_widget_destroy
-                        ),
-                    )
-                    ui.menu_item(
-                        "Reset to defaults",
-                        lambda: self.show_popup(
-                            "Are you sure you want to reset to defaults?",
-                            self._action_config_reset,
-                        ),
-                    )
-
-    async def show_popup(self, _popup_text: str, func):
-            """Call this function to trigger the popup.
-
-            The functon `func` is only called if "Yes" is clicked in the dialog.
-            """
-            self.popup_text = _popup_text
-            result = await self.popup_dialog
-            if result == "Yes":
-                func()
-
-    def _action_widget_destroy(self):
-        """Action: destroy the widget."""
-
-    def _action_config_reset(self):
-        """Action: reset to defaults."""
-        
 

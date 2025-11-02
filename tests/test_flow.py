@@ -59,6 +59,8 @@ def test_full_flow():
     assert DataNeeded.ACCOUNT_SYNC in flow.get_data_needs()
     flow.dataservice.save_account(account_name)
     assert DataNeeded.ACCOUNT_SYNC not in flow.get_data_needs()
+    ready = flow.get_savable_xactions()
+    assert len(ready) == 1
 
     flow.add_xaction_file(data_dir / "cc_one_match_one_miss.csv")
     assert DataNeeded.MATCHER_RULE in flow.get_data_needs()
@@ -79,8 +81,9 @@ def test_full_flow():
     
     assert NextStep.SAVE_XACTIONS == flow.get_next_step()
     ready = flow.get_savable_xactions()
-    assert len(ready) == 1
-    rfile = ready[0]
+    assert len(ready) == 2
     payments_account = 'Assets:Checking:PendingChecks'
-    rfile.save_to_gnucash(flow.dataservice, "Liabilities:MC1", payments_account)
+    for sfile in ready:
+        assert NextStep.SAVE_XACTIONS == flow.get_next_step()
+        sfile.save_to_gnucash(flow.dataservice, "Liabilities:MC1", payments_account)
     assert NextStep.LOAD_XACTION_FILE == flow.get_next_step()

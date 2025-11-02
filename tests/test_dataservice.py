@@ -49,8 +49,12 @@ def test_data_service():
     assert dataservice.matchers_count() == 8
 
     # 3. Load a transaction file that maps to known column map
+    assert len(dataservice.get_transaction_files()) == 0
     one_miss_first = dataservice.load_transactions(data_dir / "cc_one_match_one_miss.csv")
     assert one_miss_first.columns_mapped
+    assert len(dataservice.get_transaction_files()) == 1
+    assert len(dataservice.get_transaction_files(unsaved_only=True)) == 1
+    assert len(dataservice.get_transaction_files(saved_only=True)) == 0
     
     # 4. Find transactions with no matchers
     for xact in dataservice.get_transactions(one_miss_first):
@@ -155,9 +159,11 @@ def test_data_service():
     # make sure bogus args explode
     with pytest.raises(Exception):
         dataservice.do_cc_transactions(pay_file, cc_name="Liabilities:MC1", 
-                                              include_payments=True)
+                                       include_payments=True)
     balances = dataservice.do_cc_transactions(pay_file, cc_name="Liabilities:MC1", 
                                               include_payments=True, payments_name=payments_account)
+    assert len(dataservice.get_transaction_files(saved_only=True)) == 1
+    assert len(dataservice.get_transaction_files(unsaved_only=True)) == 2
     from pprint import pprint
     pprint(balances)
     assert balances["Liabilities:MC1"] == Decimal('0.00')

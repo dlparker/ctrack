@@ -550,6 +550,24 @@ class DataService:
 
         return file_rec
                         
+    def get_transaction_files(self, unsaved_only=False, saved_only=False):
+        session = self.Session(expire_on_commit=False
+)
+        res = []
+        try:
+            if unsaved_only:
+                items = session.query(CCTransactionFile).filter_by(saved_to_gnucash=False)
+            elif saved_only:
+                items = session.query(CCTransactionFile).filter_by(saved_to_gnucash=True)
+            else:
+                items = session.query(CCTransactionFile).filter_by()
+            for xfile in items:
+                res.append(xfile)
+        finally:
+            session.close()
+        return res
+
+    
     def get_transactions(self, transactions_file):
         session = self.Session(expire_on_commit=False)
         res = []
@@ -611,7 +629,7 @@ class DataService:
                     writer.writerow(row)
         return rows
 
-    def do_cc_transactions(self, file_rec, cc_name,
+    def do_cc_transactions(self, file_rec_in, cc_name,
                           include_payments=False, payments_name=None):
 
 
@@ -644,13 +662,14 @@ class DataService:
             warnings.simplefilter("ignore", category=sa_exc.SAWarning)
             with open_book(str(self.gnucash_path), readonly=False) as book:
                 cc_account = book.accounts(fullname=cc_name)
-                recs = self.get_transactions(file_rec)
                 session = self.Session()
-                if include_payments:
-                    if payments_name is None:
-                        raise Exception(f"Must supply payments_name")
-                    payments_account = book.accounts(fullname=payments_name)
                 try:
+                    file_rec = session.query(CCTransactionFile).filter_by(id=file_rec_in.id).first()
+                    recs = self.get_transactions(file_rec)
+                    if include_payments:
+                        if payments_name is None:
+                            raise Exception(f"Must supply payments_name")
+                        payments_account = book.accounts(fullname=payments_name)
                     for rec in recs:
                         if rec.is_payment:
                             if include_payments:
