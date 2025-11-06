@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 import re
 from pathlib import Path
+import json
 from typing import Optional, Any
 from nicegui import events, ui
 from nicegui.element import Element
@@ -213,26 +214,35 @@ class TFilePage(MainPanelContent):
                 column_map = None
             else:
                 column_map = self.dataservice.get_column_map(self.tfile_rec.col_map_id)
-            tmp = ["auto"] # for "matched" column
-            for fname in tset.column_names:
-                tmp.append("auto")
-            cstring = " ".join(tmp)
+            raw_data = self.tfile_rec.get_raw_data()
+            col_names = json.loads(raw_data.col_names_json)
+            header = []
+            if column_map:
+                header = ["auto"] # for "matched" column
+            for fname in col_names: 
+                header.append("auto")
+            cstring = " ".join(header)
             unmatched = []
             with ui.grid(columns=cstring).classes('w-full gap-0'):
-                ui.label("Matched").classes('border py-2 px-2 ')
-                for cname in tset.column_names:
+                if column_map:
+                    ui.label("Matched").classes('border py-2 px-2 ')
+                for cname in col_names:
                     ui.label(cname).classes('border py-2 px-2 ')
                 if column_map:
                     ui.label("").classes('border py-2 px-2 ')
-                    for cname in tset.column_names:
-                        if cname == tset.column_map.date_col_name:
+                    for cname in col_names:
+                        if cname == column_map.date_col_name:
                             ui.label("* DATE *").classes('border py-2 px-2 ')
-                        elif cname == tset.column_map.desc_col_name:
+                        elif cname == column_map.desc_col_name:
                             ui.label("* DESCRIPTION *").classes('border py-2 px-2 ')
-                        elif cname == tset.column_map.amt_col_name:
+                        elif cname == column_map.amt_col_name:
                             ui.label("* AMOUNT *").classes('border py-2 px-2 ')
                         else:
                             ui.label("").classes('border py-2 px-2 ')
+                for row in json.loads(raw_data.rows_json):
+                    for col in col_names:
+                        ui.label(row[col]).classes('border px-2 ')
+
 
 
 default_main_content_items = [StatusPage, GnuCashPage, TFilesPage, MatchersPage]

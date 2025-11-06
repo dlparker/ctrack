@@ -69,7 +69,7 @@ class MainFlow:
     def add_matcher_rule(self, regexp, no_case, account_name):
         self.dataservice.add_matcher(regexp, no_case, account_name)
         for xfile in self.pending_xaction_files:
-            matched, unmatched = xfile.rows_matched(self.dataservice)
+            matched, unmatched = xfile.rows_matched()
             if unmatched > 0:
                 xfile = self.dataservice.reload_transactions(xfile.import_source_file)
 
@@ -82,7 +82,7 @@ class MainFlow:
     def load_matcher_rules_file(self, path):
         self.dataservice.load_matcher_file(path)
         for xfile in self.pending_xaction_files:
-            matched, unmatched = xfile.rows_matched(self.dataservice)
+            matched, unmatched = xfile.rows_matched()
             if unmatched > 0:
                 xfile = self.dataservice.reload_transactions(xfile.import_source_file)
         
@@ -96,7 +96,7 @@ class MainFlow:
             for x_file in self.pending_xaction_files:
                 if not x_file.columns_mapped:
                     res.add(DataNeeded.COLUMN_MAP)
-                matched, unmatched = x_file.rows_matched(self.dataservice)
+                matched, unmatched = x_file.rows_matched()
                 if unmatched > 0:
                     res.add(DataNeeded.MATCHER_RULE)
         for rule in self.dataservice.get_matchers():
@@ -113,7 +113,7 @@ class MainFlow:
         for x_file in self.pending_xaction_files:
             if not x_file.columns_mapped:
                 unmapped.append(x_file)
-            matched, no_match = x_file.rows_matched(self.dataservice)
+            matched, no_match = x_file.rows_matched()
             if no_match > 0:
                 unmatched.append(x_file)
         return unmapped, unmatched
@@ -123,7 +123,7 @@ class MainFlow:
         for x_file in self.pending_xaction_files:
             if x_file.saved_to_gnucash:
                 continue
-            if x_file.is_save_ready(self.dataservice):
+            if x_file.is_save_ready():
                 res.append(x_file)
         return res
     

@@ -85,5 +85,5 @@ def test_full_flow():
     payments_account = 'Assets:Checking:PendingChecks'
     for sfile in ready:
         assert NextStep.SAVE_XACTIONS == flow.get_next_step()
-        sfile.save_to_gnucash(flow.dataservice, "Liabilities:MC1", payments_account)
+        sfile.save_to_gnucash("Liabilities:MC1", payments_account)
     assert NextStep.LOAD_XACTION_FILE == flow.get_next_step()

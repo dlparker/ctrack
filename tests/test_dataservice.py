@@ -73,7 +73,7 @@ def test_data_service():
             assert xact.matcher_id is None
             kindle_row = xact
     
-    assert one_miss_file.rows_matched(dataservice) == (1,1)
+    assert one_miss_file.rows_matched() == (1,1)
     
     # Make sure it bitches when we try to convert an unfinished file
     with pytest.raises(Exception):
