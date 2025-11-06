@@ -209,16 +209,17 @@ class TFilePage(MainPanelContent):
         self.main_panel.clear()
         with self.main_panel:
             ui.label(f'File path = {self.tfile_rec.import_source_file}')
-            if self.tfile_rec.col_map_id is None:
+            column_map = self.tfile_rec.get_column_map()
+            if column_map is None:
                 ui.label("No column map matches this file").classes('text-lg text-bold')
-                column_map = None
-            else:
-                column_map = self.dataservice.get_column_map(self.tfile_rec.col_map_id)
             raw_data = self.tfile_rec.get_raw_data()
             col_names = json.loads(raw_data.col_names_json)
             header = []
             if column_map:
                 header = ["auto"] # for "matched" column
+                xactions = self.dataservice.get_transactions(self.tfile_rec)
+            else:
+                xactions = None
             for fname in col_names: 
                 header.append("auto")
             cstring = " ".join(header)
@@ -226,23 +227,29 @@ class TFilePage(MainPanelContent):
             with ui.grid(columns=cstring).classes('w-full gap-0'):
                 if column_map:
                     ui.label("Matched").classes('border py-2 px-2 ')
-                for cname in col_names:
-                    ui.label(cname).classes('border py-2 px-2 ')
-                if column_map:
-                    ui.label("").classes('border py-2 px-2 ')
                     for cname in col_names:
-                        if cname == column_map.date_col_name:
+                        if cname == column_map.date_column:
                             ui.label("* DATE *").classes('border py-2 px-2 ')
-                        elif cname == column_map.desc_col_name:
+                        elif cname == column_map.description_column:
                             ui.label("* DESCRIPTION *").classes('border py-2 px-2 ')
-                        elif cname == column_map.amt_col_name:
+                        elif cname == column_map.amount_column:
                             ui.label("* AMOUNT *").classes('border py-2 px-2 ')
                         else:
                             ui.label("").classes('border py-2 px-2 ')
-                for row in json.loads(raw_data.rows_json):
+                if column_map:
+                    ui.label('').classes('border py-2 px-2 ')
+                for cname in col_names:
+                    ui.label(cname).classes('border py-2 px-2 ')
+                    
+                for index,row in enumerate(json.loads(raw_data.rows_json)):
+                    if column_map:
+                        xact = xactions[index]
+                        if xact.matcher_id:
+                            ui.label('True').classes('border py-2 px-2 ')
+                        else:
+                            ui.label('False').classes('border py-2 px-2 ')
                     for col in col_names:
                         ui.label(row[col]).classes('border px-2 ')
-
 
 
 default_main_content_items = [StatusPage, GnuCashPage, TFilesPage, MatchersPage]
@@ -389,7 +396,7 @@ class TransactionFilePicker:
         result = await local_file_picker(self.spath, upper_limit = self.ulimit,
                                          multiple=False)
         if result:
-            self.dataservice.add_unmapped_transaction_file(result[0])
+            self.dataservice.load_transactions(result[0])
             if self.done_callback:
                 await self.done_callback()
             

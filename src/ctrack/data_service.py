@@ -106,7 +106,7 @@ class CCTransactionFile(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     external_id = Column(String)               # typically cc name string
     import_source_file = Column(String)
-    col_map_id = Column(Integer, ForeignKey("column_maps.id", ondelete="SET NULL"), nullable=True)
+    column_map_id = Column(Integer, ForeignKey("column_maps.id", ondelete="SET NULL"), nullable=True)
     saved_to_gnucash = Column(Boolean, default=False)
     transactions = relationship("CCTransaction", backref="transaction_file")
 
@@ -117,7 +117,7 @@ class CCTransactionFile(Base):
 
     @property
     def columns_mapped(self):
-        return self.col_map_id is not None
+        return self.column_map_id is not None
 
     @property
     def display_name(self):
@@ -151,6 +151,16 @@ class CCTransactionFile(Base):
         session = self._dataservice.Session(expire_on_commit=False)
         try:
             res = session.query(CCTransactionsRaw).filter_by(file_id=self.id).first()
+        finally:
+            session.close()
+        return res
+
+    def get_column_map(self):
+        if self.column_map_id is None:
+            return None
+        session = self._dataservice.Session(expire_on_commit=False)
+        try:
+            res = session.query(ColumnMap).filter_by(id=self.column_map_id).first()
         finally:
             session.close()
         return res
@@ -207,7 +217,7 @@ class CCTransaction(Base):
     is_payment = Column(Boolean, default=False)
     file_id = Column(Integer, ForeignKey("cc_transaction_files.id", ondelete="CASCADE"))
     matcher_id = Column(Integer, ForeignKey("matcher_rules.id", ondelete="SET NULL"), nullable=True)
-
+    raw_row_number = Column(Integer)
 
 # ----------------------------------------------------------------------
 # Hard-coded column maps (e.g. for Bank of America)
@@ -239,26 +249,6 @@ def extract_gnucash_accounts(gnucash_path, account_type="EXPENSE"):
         warnings.simplefilter("ignore", category=sa_exc.SAWarning)
         with open_book(str(gnucash_path)) as book:
             return get_account_defs(book.root_account, account_type)
-
-
-
-
-
-
-
-
-# === MODIFY DataService.__init__ to register itself on its engine ===
-
-class DataService:
-    def __init__(self, ops_dir):
-        self.ops_dir = Path(ops_dir)
-        self.db_file = self.ops_dir / "ctrack.db"
-        self.engine = create_engine(f'sqlite:///{self.db_file}')
-        
-
-        Base.metadata.create_all(self.engine)
-        self.Session = sessionmaker(bind=self.engine)
-        # ... rest unchanged ...
 
 class DataService:
     def __init__(self, ops_dir):
@@ -564,13 +554,12 @@ class DataService:
         try:
             raw = session.query(CCTransactionsRaw).filter_by(file_id=file_rec.id).first()
             columns = raw.get_col_names()
-
             # Auto-detect column map
             for cmap in session.query(ColumnMap):
                 if (cmap.date_column in columns and
                     cmap.description_column in columns and
                     cmap.amount_column in columns):
-                    file_rec.col_map_id = cmap.id
+                    file_rec.column_map_id = cmap.id
                     session.add(file_rec)
                     break
             else:
@@ -579,7 +568,7 @@ class DataService:
             rows = raw.get_rows()
             matchers = self.get_matchers()
 
-            for row in rows:
+            for index,row in enumerate(rows):
                 desc = row[cmap.description_column]
                 date = datetime.strptime(row[cmap.date_column], cmap.date_format)
                 amount = Decimal(row[cmap.amount_column])
@@ -596,7 +585,8 @@ class DataService:
                                           amount=amount,
                                           is_payment=is_payment,
                                           file_id=file_rec.id,
-                                          matcher_id=matcher_id))
+                                          matcher_id=matcher_id,
+                                          raw_row_number=index))
             session.commit()
         finally:
             session.close()

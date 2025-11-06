@@ -121,17 +121,21 @@ def test_data_service():
     no_map_file = dataservice.load_transactions(data_dir / "cc_no_col_map.csv")
     assert len(dataservice.get_transactions(no_map_file)) == 0
     assert not no_map_file.columns_mapped
+    assert no_map_file.get_column_map() is None
+    # just make sure it doesn't blow up
+    assert no_map_file.get_raw_data() is not None
     
     # 10. Add new column map
     assert len(dataservice.get_column_maps()) == 1
     dataservice.add_column_map('map2',"Date", "Payee", "Amount", "%m/%d/%Y")
     assert len(dataservice.get_column_maps()) == 2
 
-
     # 11. Reprocess transaction file
     no_map_file = dataservice.reload_transactions(data_dir / "cc_no_col_map.csv")
     assert len(dataservice.get_transactions(no_map_file)) == 1
     assert no_map_file.columns_mapped
+    map_cols = no_map_file.get_column_map()
+    assert map_cols is not None
 
     # 12. Make sure payment does not break anything
     pay_file = dataservice.load_transactions(data_dir / "cc_with_payment.csv")
