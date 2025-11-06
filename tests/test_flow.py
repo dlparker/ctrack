@@ -13,8 +13,11 @@ def test_full_flow():
 
     pull_dir = Path(__file__).parent / "prep_data" / "test_full_flow"
     data_dir = Path(__file__).parent / "target"
-    for item in data_dir.glob("*"):
-        item.unlink()
+    if not data_dir.exists():
+        data_dir.mkdir()
+    else:
+        for item in data_dir.glob("*"):
+            item.unlink()
     for item in pull_dir.glob("*"):
         shutil.copy(item, data_dir)
 
