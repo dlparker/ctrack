@@ -27,7 +27,7 @@ class MainFlow:
         self.data_dir = Path(data_dir)
         self.dataservice = DataService(self.data_dir)
         if gnucash_path is not None:
-            self.data_service.load_gnucash_file(gnucash_path)
+            self.dataservice.set_gnucash_file(gnucash_path)
         self.gnucash_path = self.dataservice.gnucash_path
 
     @property

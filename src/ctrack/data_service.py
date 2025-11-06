@@ -117,7 +117,7 @@ class CCTransactionFile(Base):
     @property
     def display_name(self):
         return f"ID-{self.id}:{Path(self.import_source_file).parts[-1]}"
-    
+        
     def rows_matched(self, dataservice):
         matched = unmatched = 0
         for xact in dataservice.get_transactions(self):
@@ -250,7 +250,6 @@ class DataService:
                 print('found file')
         finally:
             session.close()
-        
 
     def get_column_maps(self):
         session = self.Session(expire_on_commit=False)
@@ -262,6 +261,14 @@ class DataService:
             session.close()
         return res
 
+    def get_column_map(self, map_id):
+        session = self.Session(expire_on_commit=False)
+        try:
+            cmap = session.query(ColumnMap).filter(id=map_id).first()
+        finally:
+            session.close()
+        return cmap
+    
     def add_column_map(self, map_name, date_column, description_column,
                        amount_column, date_format):
         

@@ -204,6 +204,35 @@ class TFilePage(MainPanelContent):
                 ui.label(self.tfile_rec.display_name)
                 ui.label(self.tfile_rec.import_source_file)
                     
+    async def show(self):
+        self.main_panel.clear()
+        with self.main_panel:
+            ui.label(f'File path = {self.tfile_rec.import_source_file}')
+            if self.tfile_rec.col_map_id is None:
+                ui.label("No column map matches this file").classes('text-lg text-bold')
+                column_map = None
+            else:
+                column_map = self.dataservice.get_column_map(self.tfile_rec.col_map_id)
+            tmp = ["auto"] # for "matched" column
+            for fname in tset.column_names:
+                tmp.append("auto")
+            cstring = " ".join(tmp)
+            unmatched = []
+            with ui.grid(columns=cstring).classes('w-full gap-0'):
+                ui.label("Matched").classes('border py-2 px-2 ')
+                for cname in tset.column_names:
+                    ui.label(cname).classes('border py-2 px-2 ')
+                if column_map:
+                    ui.label("").classes('border py-2 px-2 ')
+                    for cname in tset.column_names:
+                        if cname == tset.column_map.date_col_name:
+                            ui.label("* DATE *").classes('border py-2 px-2 ')
+                        elif cname == tset.column_map.desc_col_name:
+                            ui.label("* DESCRIPTION *").classes('border py-2 px-2 ')
+                        elif cname == tset.column_map.amt_col_name:
+                            ui.label("* AMOUNT *").classes('border py-2 px-2 ')
+                        else:
+                            ui.label("").classes('border py-2 px-2 ')
 
 
 default_main_content_items = [StatusPage, GnuCashPage, TFilesPage, MatchersPage]
