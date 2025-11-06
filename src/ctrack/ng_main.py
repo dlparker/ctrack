@@ -126,6 +126,7 @@ class TFilesPage(MainPanelContent):
     def __init__(self, main_window):
         super().__init__(self.page_name, main_window)
         self.dataservice = self.main_window.ui_app.dataservice
+        self.file_pages = {}
         
     async def show(self):
         self.main_panel.clear()
@@ -138,15 +139,25 @@ class TFilesPage(MainPanelContent):
                 ui.label('Status').classes('py-2 px-2 ')
                 ui.label('Action').classes('py-2 px-2 ')
                 ui.label('Path').classes('py-2 px-2 ')
-                for rawfile in self.dataservice.get_transaction_files(unsaved_only=True):
+                for workfile in self.dataservice.get_transaction_files(unsaved_only=True):
                     ui.label('Not saved').classes('py-2 px-2 ')
-                    ui.label('foo').classes('py-2 px-2 ')
-                    ui.label(rawfile.import_source_file).classes('py-2 px-2 ')
+                    ui.button('Edit',
+                              on_click=lambda workfile=workfile:self.edit_file(workfile)
+                              ).classes('py-2 px-2 ')
+                    ui.label(workfile.import_source_file).classes('py-2 px-2 ')
                 for savedfile in self.dataservice.get_transaction_files(saved_only=True):
                     ui.label('Saved').classes('py-2 px-2 ')
-                    ui.label('foo').classes('py-2 px-2 ')
+                    ui.label('View').classes('py-2 px-2 ')
                     ui.label(savedfile.import_source_file).classes('py-2 px-2 ')
 
+    async def edit_file(self, workfile):
+        print(f"would edit {workfile}")
+        if workfile.display_name not in self.file_pages:
+            tfp = TFilePage(self.main_window, workfile)
+            self.main_nav.add_main_panel_content(tfp)
+        await self.main_nav.show_main_content(workfile.display_name)
+              
+        
 class MatchersPage(MainPanelContent):
 
     page_name = "Matchers"
@@ -172,6 +183,27 @@ class MatchersPage(MainPanelContent):
                     ui.label(matcher.account_name).classes('border py-1 px-2')
 
 
+class TFilePage(MainPanelContent):
+
+    
+    def __init__(self, main_window, tfile_rec):
+        self.tfile_rec = tfile_rec
+        page_name = tfile_rec.display_name
+        super().__init__(page_name, main_window)
+        self.dataservice = self.main_window.ui_app.dataservice
+        
+    async def show(self):
+        self.main_panel.clear()
+        with self.main_panel:
+            with ui.grid(columns='auto auto 1fr').classes('w-full gap-0'):
+                ui.label('Regexp').classes('border py-2 px-2 ')
+                ui.label('NoCase').classes('border py-2 px-2 ')
+                ui.label('Account Path').classes('border py-2 px-2')
+
+                ui.label('')
+                ui.label(self.tfile_rec.display_name)
+                ui.label(self.tfile_rec.import_source_file)
+                    
 
 
 default_main_content_items = [StatusPage, GnuCashPage, TFilesPage, MatchersPage]

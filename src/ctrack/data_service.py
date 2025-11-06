@@ -114,6 +114,10 @@ class CCTransactionFile(Base):
             return False
         return True
 
+    @property
+    def display_name(self):
+        return f"ID-{self.id}:{Path(self.import_source_file).parts[-1]}"
+    
     def rows_matched(self, dataservice):
         matched = unmatched = 0
         for xact in dataservice.get_transactions(self):
