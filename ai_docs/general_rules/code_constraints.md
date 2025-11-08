@@ -1,5 +1,5 @@
 
-Constraints on desing and code.
+Constraints on design and code.
 
 # Error Handling
 

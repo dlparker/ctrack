@@ -15,7 +15,7 @@ def main(data_dir, web_mode, gnucash_path):
     @ui.page('/')
     async def index():
         nonlocal ui_app
-        from ctrack.ng_main import UIApp, MainWindow
+        from ctrack.ng.ng_main import UIApp, MainWindow
         if ui_app is None:
             ui_app = UIApp(data_dir, gnucash_path)
             await ui_app.start()

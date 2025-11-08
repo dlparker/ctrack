@@ -417,5 +417,3 @@ class MatcherFilePicker:
             if self.done_callback:
                 await self.done_callback()
             
-
-
